@@ -20,7 +20,6 @@ export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState('30d')
   const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [classes, setClasses] = useState(['All'])
   const [monthlyData, setMonthlyData] = useState<any[]>([])
   const [dailyTrends, setDailyTrends] = useState<any[]>([])
@@ -57,8 +56,6 @@ export default function AnalyticsPage() {
     : generateMockDeviceComparison()
 
   // Hourly pattern (dynamic based on current hour)
-  const now = new Date()
-  const currentHour = now.getHours()
   const hourlyPattern = Array.from({ length: 6 }, (_, i) => {
     const h = (i * 4) % 24
     const hour = String(h).padStart(2, '0')
@@ -103,7 +100,6 @@ export default function AnalyticsPage() {
     // Set static data
     setMonthlyData(defaultMonthlyData)
     setDailyTrends(defaultDailyTrends)
-    setError(null)
     setLoading(false)
   }, [])
 
@@ -117,6 +113,8 @@ export default function AnalyticsPage() {
       </div>
     )
   }
+
+  return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
       <aside

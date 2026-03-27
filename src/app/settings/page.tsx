@@ -54,8 +54,8 @@ export default function SettingsPage() {
           const key = setting.key.replace(/\./g, '_')
           if (key in mergedSettings) {
             const value = setting.value
-            mergedSettings[key as keyof typeof settings] = 
-              value === 'true' ? true : value === 'false' ? false : isNaN(Number(value)) ? value : Number(value)
+            const parsedValue = value === 'true' ? true : value === 'false' ? false : isNaN(Number(value)) ? value : Number(value)
+            ;(mergedSettings as any)[key] = parsedValue
           }
         })
         
