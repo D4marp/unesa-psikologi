@@ -72,8 +72,15 @@ export default function DevicesPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} gradient-primary text-white transition-all duration-300 flex flex-col shadow-xl`}>
+    <div className="flex h-screen bg-gray-50" style={{
+      backgroundImage: 'url(/Bg_image.png)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed'
+    }}>
+      {/* Semi-transparent overlay */}
+      <div className="absolute inset-0 bg-white/40 pointer-events-none"></div>
+      <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} gradient-primary text-white transition-all duration-300 flex flex-col shadow-xl relative z-20`}>
         <div className="p-4 flex items-center justify-between">
           {sidebarOpen && (
             <div className="flex-1 w-full h-auto">
@@ -97,7 +104,7 @@ export default function DevicesPage() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto relative z-10">
         <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="px-8 py-6">
             <div className="flex justify-between items-center mb-4">

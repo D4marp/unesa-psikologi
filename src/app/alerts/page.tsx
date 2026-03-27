@@ -103,11 +103,18 @@ export default function AlertsPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50" style={{
+      backgroundImage: 'url(/Bg_image.png)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed'
+    }}>
+      {/* Semi-transparent overlay */}
+      <div className="absolute inset-0 bg-white/40 pointer-events-none"></div>
       {/* Sidebar */}
       <aside className={`${
         sidebarOpen ? 'w-64' : 'w-20'
-      } gradient-primary text-white transition-all duration-300 flex flex-col shadow-xl`}>
+      } gradient-primary text-white transition-all duration-300 flex flex-col shadow-xl relative z-20`}>
         <div className="p-4 flex items-center justify-between">
           {sidebarOpen && (
             <div className="flex-1 w-full h-auto">
@@ -132,7 +139,7 @@ export default function AlertsPage() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto relative z-10">
         {/* Header */}
         <header className="bg-white shadow-sm border-b border-gray-200 p-6">
           <div className="flex justify-between items-center mb-4">
