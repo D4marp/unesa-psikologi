@@ -73,7 +73,7 @@ export default function DevicesPage() {
 
   return (
     <div className="flex h-screen bg-gray-50" style={{
-      backgroundImage: 'url(/Bg_image.png)',
+      backgroundImage: 'url(/assets/bg_image.png)',
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundAttachment: 'fixed'
