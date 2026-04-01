@@ -4,6 +4,7 @@ import { Power, AlertCircle, Settings, Zap, Gauge, Menu } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useState, useEffect } from 'react'
+import { devicesAPI } from '@/lib/apiClient'
 
 interface Device {
   id: number
@@ -25,23 +26,31 @@ export default function DevicesPage() {
   const [error, setError] = useState<string | null>(null)
   const [classes, setClasses] = useState(['All'])
 
-  // Load devices
+  // Load devices from backend API
   useEffect(() => {
-    // Use static dummy data
-    const staticDevices = [
-      { id: 1, device_eui: 'AC-KELAS-A-001', device_name: 'AC Kelas A', device_type: 'AC', application_type: 'cooling', location: 'Ruang A1', current_power: 2.5, current_temperature: 22.5, iot_status: 'online' },
-      { id: 2, device_eui: 'AC-KELAS-B-001', device_name: 'AC Kelas B', device_type: 'AC', application_type: 'cooling', location: 'Ruang B1', current_power: 3.2, current_temperature: 23.1, iot_status: 'online' },
-      { id: 3, device_eui: 'AC-KELAS-C-001', device_name: 'AC Kelas C', device_type: 'AC', application_type: 'cooling', location: 'Ruang C1', current_power: 2.8, current_temperature: 22.8, iot_status: 'online' },
-      { id: 4, device_eui: 'LAMP-KELAS-D-001', device_name: 'Lampu Kelas D', device_type: 'Lampung', application_type: 'lighting', location: 'Ruang D1', current_power: 1.2, current_temperature: 20.0, iot_status: 'online' },
-      { id: 5, device_eui: 'LAMP-KELAS-E-001', device_name: 'Lampu Kelas E', device_type: 'Lampung', application_type: 'lighting', location: 'Ruang E1', current_power: 1.5, current_temperature: 20.5, iot_status: 'online' },
-    ]
-    
-    // Extract unique locations
-    const uniqueClasses = ['All', ...new Set(staticDevices.map((d: Device) => d.location))]
-    setClasses(uniqueClasses)
-    setDevices(staticDevices)
-    setError(null)
-    setLoading(false)
+    const loadDevices = async () => {
+      try {
+        setLoading(true)
+        const devicesData = await devicesAPI.getAll()
+        setDevices(devicesData || [])
+        
+        // Extract unique locations
+        if (devicesData && devicesData.length > 0) {
+          const uniqueClasses = ['All', ...new Set(devicesData.map((d: Device) => d.location))]
+          setClasses(uniqueClasses)
+        }
+        
+        setError(null)
+      } catch (err) {
+        console.error('Error loading devices:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load devices')
+        setDevices([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDevices()
   }, [])
 
   const filteredDevices = selectedClass === 'All' 

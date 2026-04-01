@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Menu, Settings, Bell, AlertCircle, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { alertsAPI } from '@/lib/apiClient'
 
 interface Alert {
   id: number
@@ -18,46 +19,29 @@ interface Alert {
 export default function AlertsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [filterStatus, setFilterStatus] = useState('all')
-  
-  // Static dummy alerts data
-  const [alerts, setAlerts] = useState<Alert[]>([
-    {
-      id: 1,
-      title: 'AC Temperature High',
-      message: 'AC Kelas A temperature exceeded 25°C',
-      severity: 'high',
-      status: 'unread',
-      device_id: 1,
-      created_at: '2026-03-26T10:30:00',
-    },
-    {
-      id: 2,
-      title: 'Power Consumption Peak',
-      message: 'AC Kelas B consuming 3.5 kW (above threshold)',
-      severity: 'medium',
-      status: 'unread',
-      device_id: 2,
-      created_at: '2026-03-26T09:15:00',
-    },
-    {
-      id: 3,
-      title: 'Normal Operation',
-      message: 'All devices operating normally',
-      severity: 'low',
-      status: 'read',
-      device_id: 3,
-      created_at: '2026-03-26T08:00:00',
-    },
-    {
-      id: 4,
-      title: 'Maintenance Required',
-      message: 'Lamp Kelas D requires maintenance check',
-      severity: 'medium',
-      status: 'unread',
-      device_id: 4,
-      created_at: '2026-03-25T14:20:00',
-    },
-  ])
+  const [alerts, setAlerts] = useState<Alert[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Load alerts from backend API
+  useEffect(() => {
+    const loadAlerts = async () => {
+      try {
+        setLoading(true)
+        const alertsData = await alertsAPI.getAll()
+        setAlerts(alertsData || [])
+        setError(null)
+      } catch (err) {
+        console.error('Error loading alerts:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load alerts')
+        setAlerts([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadAlerts()
+  }, [])
 
   const filteredAlerts = filterStatus === 'all' 
     ? alerts 
@@ -100,6 +84,29 @@ export default function AlertsPage() {
 
   const handleDelete = (id: number) => {
     setAlerts(alerts.filter(a => a.id !== id))
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-gray-50 items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Memuat pemberitahuan...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-screen bg-gray-50 items-center justify-center">
+        <div className="text-center bg-white p-6 rounded-lg shadow">
+          <AlertCircle className="text-red-500 mx-auto mb-4" size={32} />
+          <p className="text-red-600 font-semibold">Error: {error}</p>
+          <p className="text-gray-600 mt-2 text-sm">Silakan coba muat ulang halaman</p>
+        </div>
+      </div>
+    )
   }
 
   return (

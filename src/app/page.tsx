@@ -11,6 +11,7 @@ import {
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { devicesAPI, consumptionAPI } from '@/lib/apiClient'
 
 interface Device {
   id: number
@@ -44,41 +45,77 @@ export default function Dashboard() {
   // Extract unique classes from devices
   const [classes, setClasses] = useState(['All'])
 
-  // Load devices and consumption data
+  // Load devices and consumption data from backend
   useEffect(() => {
-    // Use static dummy data
-    const staticDevices = [
-      { id: 1, device_eui: 'AC-KELAS-A-001', device_name: 'AC Kelas A', device_type: 'AC', application_type: 'cooling', location: 'Ruang A1', current_power: 2.5, current_temperature: 22.5, iot_status: 'online' },
-      { id: 2, device_eui: 'AC-KELAS-B-001', device_name: 'AC Kelas B', device_type: 'AC', application_type: 'cooling', location: 'Ruang B1', current_power: 3.2, current_temperature: 23.1, iot_status: 'online' },
-      { id: 3, device_eui: 'AC-KELAS-C-001', device_name: 'AC Kelas C', device_type: 'AC', application_type: 'cooling', location: 'Ruang C1', current_power: 2.8, current_temperature: 22.8, iot_status: 'online' },
-      { id: 4, device_eui: 'LAMP-KELAS-D-001', device_name: 'Lampu Kelas D', device_type: 'Lampung', application_type: 'lighting', location: 'Ruang D1', current_power: 1.2, current_temperature: 20.0, iot_status: 'online' },
-      { id: 5, device_eui: 'LAMP-KELAS-E-001', device_name: 'Lampu Kelas E', device_type: 'Lampung', application_type: 'lighting', location: 'Ruang E1', current_power: 1.5, current_temperature: 20.5, iot_status: 'online' },
-    ]
-    
-    const uniqueClasses = ['All', ...new Set(staticDevices.map((d: Device) => d.location))]
-    setClasses(uniqueClasses)
-    setDevices(staticDevices)
-    
-    // Use static energy data for today
-    setEnergyData([
-      { time: '00:00', ac: 15, lamp: 8 },
-      { time: '04:00', ac: 12, lamp: 5 },
-      { time: '08:00', ac: 22, lamp: 18 },
-      { time: '12:00', ac: 28, lamp: 25 },
-      { time: '16:00', ac: 26, lamp: 22 },
-      { time: '20:00', ac: 32, lamp: 28 },
-      { time: '24:00', ac: 24, lamp: 18 },
-    ])
-    
-    // Use static monthly data - only March and April (installation period)
-    // No previous data available, future data not yet collected
-    setMonthlyData([
-      { month: 'Mar', ac: 0, lamp: 0 },      // Before installation
-      { month: 'Apr', ac: 350, lamp: 180 },  // Installation completed, initial data
-    ])
-    
-    setLoading(false)
-    setError(null)
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true)
+        
+        // Fetch all devices from backend
+        const devicesData = await devicesAPI.getAll()
+        setDevices(devicesData || [])
+        
+        // Extract unique locations (classes)
+        if (devicesData && devicesData.length > 0) {
+          const uniqueClasses = ['All', ...new Set(devicesData.map((d: Device) => d.location))]
+          setClasses(uniqueClasses)
+        }
+        
+        // Load today's hourly consumption data (from first device as example)
+        const today = new Date().toISOString().split('T')[0]
+        if (devicesData && devicesData.length > 0) {
+          try {
+            const hourlyData = await consumptionAPI.getHourly(devicesData[0].id, today)
+            // Transform hourly data to chart format
+            if (hourlyData && hourlyData.length > 0) {
+              const chartData = hourlyData.map((item: any) => ({
+                time: item.hour_start?.substring(11, 16) || '00:00',
+                ac: parseFloat(item.consumption) || 0,
+                lamp: 0, // Will be populated from actual data
+              }))
+              setEnergyData(chartData.slice(0, 7)) // Show last 7 hourly slots
+            }
+          } catch (e) {
+            console.warn('Could not load hourly consumption data:', e)
+            setEnergyData(generateMockCharData())
+          }
+        }
+        
+        // Load monthly consumption data
+        const currentDate = new Date()
+        const currentMonth = currentDate.toISOString().substring(0, 7)
+        if (devicesData && devicesData.length > 0) {
+          try {
+            const monthlyDataApi = await consumptionAPI.getMonthly(devicesData[0].id, currentMonth)
+            if (monthlyDataApi && monthlyDataApi.length > 0) {
+              const monthlyChart = monthlyDataApi.map((item: any) => ({
+                month: item.consumption_date?.substring(5, 7) || 'Apr',
+                ac: parseFloat(item.consumption) || 0,
+                lamp: 0,
+              }))
+              setMonthlyData(monthlyChart)
+            }
+          } catch (e) {
+            console.warn('Could not load monthly consumption data:', e)
+            setMonthlyData(generateMockMonthlyData())
+          }
+        }
+        
+        setError(null)
+      } catch (err) {
+        console.error('Error loading dashboard data:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load data')
+        // Show mock data on error
+        setDevices([])
+        setClasses(['All'])
+        setEnergyData(generateMockCharData())
+        setMonthlyData(generateMockMonthlyData())
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDashboardData()
   }, [])
 
   // Filter devices by selected class
