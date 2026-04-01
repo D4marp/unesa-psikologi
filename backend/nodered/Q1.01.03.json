@@ -1,1 +1,1060 @@
-[]
+[
+    {
+        "id": "942e07cd47802559",
+        "type": "tab",
+        "label": "Q1.01.03 (Class Room 2)",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "6381fb675981bcc3",
+        "type": "inject",
+        "z": "942e07cd47802559",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 320,
+        "y": 60,
+        "wires": [
+            [
+                "5dc9dd44d63c6007"
+            ]
+        ]
+    },
+    {
+        "id": "5dc9dd44d63c6007",
+        "type": "Discover",
+        "z": "942e07cd47802559",
+        "name": "",
+        "x": 500,
+        "y": 60,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "be082dabea838295",
+        "type": "inject",
+        "z": "942e07cd47802559",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 320,
+        "y": 140,
+        "wires": [
+            [
+                "b3e5a662396a3c84"
+            ]
+        ]
+    },
+    {
+        "id": "f72fc7bc5aa11c3b",
+        "type": "template",
+        "z": "942e07cd47802559",
+        "name": "",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "{{payload.data}}",
+        "output": "str",
+        "x": 700,
+        "y": 140,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "b3e5a662396a3c84",
+        "type": "RM",
+        "z": "942e07cd47802559",
+        "name": "RM4PRO",
+        "device": "bba3afebcd73c7bb",
+        "action": "learn",
+        "remote": "",
+        "button": "",
+        "fix": 1,
+        "RFSweep": "false",
+        "x": 520,
+        "y": 140,
+        "wires": [
+            [
+                "f72fc7bc5aa11c3b"
+            ]
+        ]
+    },
+    {
+        "id": "2ac0f3f0c598e12d",
+        "type": "inject",
+        "z": "942e07cd47802559",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 320,
+        "y": 240,
+        "wires": [
+            [
+                "12484022668f6ea3"
+            ]
+        ]
+    },
+    {
+        "id": "e8bb4d5ddaf94f43",
+        "type": "template",
+        "z": "942e07cd47802559",
+        "name": "",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "{{payload.data}}",
+        "output": "str",
+        "x": 820,
+        "y": 240,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "5f104db2bce12e53",
+        "type": "RM",
+        "z": "942e07cd47802559",
+        "name": "RM4PRO",
+        "device": "bba3afebcd73c7bb",
+        "action": "_msg_",
+        "remote": "",
+        "button": "",
+        "fix": 1,
+        "RFSweep": "false",
+        "x": 640,
+        "y": 240,
+        "wires": [
+            [
+                "e8bb4d5ddaf94f43"
+            ]
+        ]
+    },
+    {
+        "id": "12484022668f6ea3",
+        "type": "function",
+        "z": "942e07cd47802559",
+        "name": "function 8",
+        "func": "//Insert learned data object here\nvar data = [38,0,200,0,193,237,17,18,17,19,16,18,17,19,16,18,18,18,16,19,17,18,17,18,17,18,18,17,17,19,17,17,18,18,17,18,17,18,17,19,16,18,18,18,16,19,17,18,16,19,17,18,17,18,17,19,17,17,17,19,17,17,18,18,17,52,16,19,17,18,17,18,17,19,16,18,18,18,17,17,18,18,17,18,17,18,18,18,16,19,17,18,16,19,17,18,17,18,17,19,16,18,17,19,16,18,18,18,16,19,17,18,18,17,17,18,18,18,16,19,17,52,17,17,18,52,17,18,17,51,18,52,17,18,17,18,17,19,16,18,17,19,17,17,18,18,17,18,17,52,17,18,17,18,17,19,17,52,16,18,18,52,17,17,17,19,17,52,16,19,17,52,17,18,17,18,17,52,18,17,17,52,17,52,18,51,17,52,17,18,18,51,17,18,17,52,18,51,17,236,17,0,13,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];\n// or Base64 encoded format from other source\n//var data = \"JgBMAnM3ECkQKRANEAwRDQ8pEAwQDRApDyoQDQ8pEA0QDRAoECkQDRAoEigQDBEMECkRDBAMECkQDRAMEA0QDRAMEA0QDRANDw4PDQ8NEA0PDRANEA0RDA8NEAwRDBAMESgQDRAMEA0QDRAMESgQKRANEAwRDBApDyoQDBApEA4PDBILEQwQDRAoESgRDBApECkQDBANECkQDBANECgRDBANECkQDBEoEQwQKQ8NEA0QKQ8qEAwQDRAMEA0QDQ8NEA0QDBEMEAwRDQ8ODwwRDBAMEA0QDRAMEA0QDBANEQwQDRAMEA4PDRANEAwQDBANEA0QDBEMEAwQDRAMEA4PDBEMEA0PDRANEAwRDQ4OEAwRDBEMEAwQDRANECgQKRApECkQDBEMEAACMnc4ECgQKRANEQwQDQ8pEQwQDQ8qECgQDRApEA0QDBEoECkQDBEoECkQDRAMECkQDRAMECkQDRANEAwQDRANDw0QDQ8NEQwQDBEMEA0PDRENDw0QDBANDw0QDRANECgRDBAMEA0QDRAMECkRKBANEAwRDBApECkQDBEoEQwQDRAMEA0QDBApECkQDRApECgQDRANECgRDBANECgRDBANECgRDBApEAwQKRANEAwRKBApEQwQDBEMEA0QDBEMEA0QDQ8NDw0RDBAMEQwQDRAMEA0QDBEMEA0QDBANEAwQDRANEAwQDRANEAwQDRAMEA0QDRAMEA0QDBANEA0RCxILEQwQDBEMEA0QDBEMEA0QDQ8NEQwQDBANECkPKhApECkQDBANEAANBQAAAAAAAAAAAAAAAA==\"\n\nmsg.payload={\n    //\"mac\":\"MAC address of your broadlink rm\",  // Optional if configured in the RM node\n    //\"host\":\"IP address of your broadlink rm\",  // Optional if configured in the RM node\n    \"action\":\"send\",\n    \"data\":data,\n    \"repeat\":2\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 240,
+        "wires": [
+            [
+                "5f104db2bce12e53"
+            ]
+        ]
+    },
+    {
+        "id": "2ad5d9689a571139",
+        "type": "comment",
+        "z": "942e07cd47802559",
+        "name": "24°C",
+        "info": "",
+        "x": 280,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "0673ed0a0f60728d",
+        "type": "inject",
+        "z": "942e07cd47802559",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 320,
+        "y": 740,
+        "wires": [
+            [
+                "144d283b87168d00"
+            ]
+        ]
+    },
+    {
+        "id": "739880296638b725",
+        "type": "template",
+        "z": "942e07cd47802559",
+        "name": "",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "{{payload.data}}",
+        "output": "str",
+        "x": 820,
+        "y": 740,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "7cc376c13c0ec6a7",
+        "type": "RM",
+        "z": "942e07cd47802559",
+        "name": "RM4PRO",
+        "device": "bba3afebcd73c7bb",
+        "action": "_msg_",
+        "remote": "",
+        "button": "",
+        "fix": 1,
+        "RFSweep": "false",
+        "x": 640,
+        "y": 740,
+        "wires": [
+            [
+                "739880296638b725"
+            ]
+        ]
+    },
+    {
+        "id": "144d283b87168d00",
+        "type": "function",
+        "z": "942e07cd47802559",
+        "name": "function 9",
+        "func": "//Insert learned data object here\nvar data = [38,0,200,0,194,236,18,18,17,19,16,18,18,18,16,18,18,18,16,19,16,19,17,18,16,20,16,18,17,19,17,18,17,18,17,19,16,18,17,19,16,18,18,18,16,19,17,18,17,19,16,18,18,18,16,19,17,18,17,18,17,18,17,18,17,52,18,18,16,18,18,18,17,19,16,18,18,18,15,19,18,18,16,19,17,18,17,18,17,18,17,18,17,19,17,18,17,18,17,19,16,18,17,19,16,18,17,19,16,19,16,19,16,19,17,18,18,18,16,19,17,18,16,19,16,53,17,18,17,52,17,52,17,19,16,18,17,19,16,18,18,18,16,19,17,18,16,19,17,52,16,20,16,18,17,19,16,53,16,19,16,53,16,18,18,18,17,52,16,19,17,52,17,19,16,18,16,53,18,18,16,52,17,52,18,18,16,53,16,19,17,52,16,19,17,52,17,52,16,236,18,0,13,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];\n// or Base64 encoded format from other source\n//var data = \"JgBMAnM3ECkQKRANEAwRDQ8pEAwQDRApDyoQDQ8pEA0QDRAoECkQDRAoEigQDBEMECkRDBAMECkQDRAMEA0QDRAMEA0QDRANDw4PDQ8NEA0PDRANEA0RDA8NEAwRDBAMESgQDRAMEA0QDRAMESgQKRANEAwRDBApDyoQDBApEA4PDBILEQwQDRAoESgRDBApECkQDBANECkQDBANECgRDBANECkQDBEoEQwQKQ8NEA0QKQ8qEAwQDRAMEA0QDQ8NEA0QDBEMEAwRDQ8ODwwRDBAMEA0QDRAMEA0QDBANEQwQDRAMEA4PDRANEAwQDBANEA0QDBEMEAwQDRAMEA4PDBEMEA0PDRANEAwRDQ4OEAwRDBEMEAwQDRANECgQKRApECkQDBEMEAACMnc4ECgQKRANEQwQDQ8pEQwQDQ8qECgQDRApEA0QDBEoECkQDBEoECkQDRAMECkQDRAMECkQDRANEAwQDRANDw0QDQ8NEQwQDBEMEA0PDRENDw0QDBANDw0QDRANECgRDBAMEA0QDRAMECkRKBANEAwRDBApECkQDBEoEQwQDRAMEA0QDBApECkQDRApECgQDRANECgRDBANECgRDBANECgRDBApEAwQKRANEAwRKBApEQwQDBEMEA0QDBEMEA0QDQ8NDw0RDBAMEQwQDRAMEA0QDBEMEA0QDBANEAwQDRANEAwQDRANEAwQDRAMEA0QDRAMEA0QDBANEA0RCxILEQwQDBEMEA0QDBEMEA0QDQ8NEQwQDBANECkPKhApECkQDBANEAANBQAAAAAAAAAAAAAAAA==\"\n\nmsg.payload={\n    //\"mac\":\"MAC address of your broadlink rm\",  // Optional if configured in the RM node\n    //\"host\":\"IP address of your broadlink rm\",  // Optional if configured in the RM node\n    \"action\":\"send\",\n    \"data\":data,\n    \"repeat\":2\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 740,
+        "wires": [
+            [
+                "7cc376c13c0ec6a7"
+            ]
+        ]
+    },
+    {
+        "id": "4cf006811f082618",
+        "type": "comment",
+        "z": "942e07cd47802559",
+        "name": "AC OFF",
+        "info": "",
+        "x": 300,
+        "y": 700,
+        "wires": []
+    },
+    {
+        "id": "20092df739e76f41",
+        "type": "inject",
+        "z": "942e07cd47802559",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 320,
+        "y": 340,
+        "wires": [
+            [
+                "496baaecd28ffde6"
+            ]
+        ]
+    },
+    {
+        "id": "038626accdc9cbfd",
+        "type": "template",
+        "z": "942e07cd47802559",
+        "name": "",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "{{payload.data}}",
+        "output": "str",
+        "x": 820,
+        "y": 340,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "d2138d612df580ef",
+        "type": "RM",
+        "z": "942e07cd47802559",
+        "name": "RM4PRO",
+        "device": "bba3afebcd73c7bb",
+        "action": "_msg_",
+        "remote": "",
+        "button": "",
+        "fix": 1,
+        "RFSweep": "false",
+        "x": 640,
+        "y": 340,
+        "wires": [
+            [
+                "038626accdc9cbfd"
+            ]
+        ]
+    },
+    {
+        "id": "496baaecd28ffde6",
+        "type": "function",
+        "z": "942e07cd47802559",
+        "name": "function 10",
+        "func": "//Insert learned data object here\nvar data = [38,0,200,0,195,236,17,18,17,19,16,18,18,18,16,19,17,18,16,19,17,18,17,18,17,19,15,19,18,18,16,18,18,18,16,19,17,18,17,19,16,18,18,18,16,19,16,19,16,19,17,18,16,19,17,19,16,18,17,19,16,19,17,18,16,53,16,19,17,18,17,19,15,19,17,19,16,19,17,18,16,19,17,18,17,18,17,19,16,18,17,19,16,18,18,18,16,19,17,18,16,19,17,18,17,19,15,19,17,19,16,19,16,19,17,18,17,18,17,18,16,53,16,20,16,52,17,19,15,53,17,52,16,19,17,18,17,19,16,18,17,19,17,18,16,19,17,19,15,54,16,18,17,53,16,53,15,19,18,18,16,52,17,19,16,18,18,52,17,18,16,53,16,19,16,19,17,51,17,19,15,54,17,52,17,18,16,53,16,19,17,52,16,20,16,52,17,52,16,237,15,0,13,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];\n// or Base64 encoded format from other source\n//var data = \"JgBMAnM3ECkQKRANEAwRDQ8pEAwQDRApDyoQDQ8pEA0QDRAoECkQDRAoEigQDBEMECkRDBAMECkQDRAMEA0QDRAMEA0QDRANDw4PDQ8NEA0PDRANEA0RDA8NEAwRDBAMESgQDRAMEA0QDRAMESgQKRANEAwRDBApDyoQDBApEA4PDBILEQwQDRAoESgRDBApECkQDBANECkQDBANECgRDBANECkQDBEoEQwQKQ8NEA0QKQ8qEAwQDRAMEA0QDQ8NEA0QDBEMEAwRDQ8ODwwRDBAMEA0QDRAMEA0QDBANEQwQDRAMEA4PDRANEAwQDBANEA0QDBEMEAwQDRAMEA4PDBEMEA0PDRANEAwRDQ4OEAwRDBEMEAwQDRANECgQKRApECkQDBEMEAACMnc4ECgQKRANEQwQDQ8pEQwQDQ8qECgQDRApEA0QDBEoECkQDBEoECkQDRAMECkQDRAMECkQDRANEAwQDRANDw0QDQ8NEQwQDBEMEA0PDRENDw0QDBANDw0QDRANECgRDBAMEA0QDRAMECkRKBANEAwRDBApECkQDBEoEQwQDRAMEA0QDBApECkQDRApECgQDRANECgRDBANECgRDBANECgRDBApEAwQKRANEAwRKBApEQwQDBEMEA0QDBEMEA0QDQ8NDw0RDBAMEQwQDRAMEA0QDBEMEA0QDBANEAwQDRANEAwQDRANEAwQDRAMEA0QDRAMEA0QDBANEA0RCxILEQwQDBEMEA0QDBEMEA0QDQ8NEQwQDBANECkPKhApECkQDBANEAANBQAAAAAAAAAAAAAAAA==\"\n\nmsg.payload={\n    //\"mac\":\"MAC address of your broadlink rm\",  // Optional if configured in the RM node\n    //\"host\":\"IP address of your broadlink rm\",  // Optional if configured in the RM node\n    \"action\":\"send\",\n    \"data\":data,\n    \"repeat\":2\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 490,
+        "y": 340,
+        "wires": [
+            [
+                "d2138d612df580ef"
+            ]
+        ]
+    },
+    {
+        "id": "2cfd763d0b4e629f",
+        "type": "comment",
+        "z": "942e07cd47802559",
+        "name": "22°C",
+        "info": "",
+        "x": 280,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "b940ebe60469da65",
+        "type": "inject",
+        "z": "942e07cd47802559",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 320,
+        "y": 440,
+        "wires": [
+            [
+                "dfe9d1230c2ba82d"
+            ]
+        ]
+    },
+    {
+        "id": "3a3e8553b76ee302",
+        "type": "template",
+        "z": "942e07cd47802559",
+        "name": "",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "{{payload.data}}",
+        "output": "str",
+        "x": 820,
+        "y": 440,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "11ec9b23631c6d8e",
+        "type": "RM",
+        "z": "942e07cd47802559",
+        "name": "RM4PRO",
+        "device": "bba3afebcd73c7bb",
+        "action": "_msg_",
+        "remote": "",
+        "button": "",
+        "fix": 1,
+        "RFSweep": "false",
+        "x": 640,
+        "y": 440,
+        "wires": [
+            [
+                "3a3e8553b76ee302"
+            ]
+        ]
+    },
+    {
+        "id": "dfe9d1230c2ba82d",
+        "type": "function",
+        "z": "942e07cd47802559",
+        "name": "function 11",
+        "func": "//Insert learned data object here\nvar data = [38,0,200,0,194,236,17,18,17,18,17,19,16,18,17,19,17,17,18,18,17,19,16,18,17,19,16,18,18,18,16,18,18,18,16,19,17,18,17,18,17,18,18,17,17,19,17,17,18,18,17,18,17,18,17,19,16,18,17,19,16,18,18,18,16,52,17,19,17,18,17,18,17,18,17,18,17,19,16,18,18,18,16,18,18,18,17,18,17,18,18,18,15,19,18,18,16,19,17,18,16,19,17,18,16,19,17,19,16,18,17,19,16,18,18,18,16,19,17,18,16,53,17,18,17,52,16,19,17,52,17,52,16,19,16,19,17,19,16,18,18,18,16,19,17,18,16,19,17,52,17,17,18,18,17,52,16,19,17,18,17,53,16,18,16,20,16,52,17,18,17,53,16,18,18,18,16,52,17,19,17,52,16,53,16,52,17,19,16,18,18,51,18,18,16,52,17,52,17,237,16,0,13,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];\n// or Base64 encoded format from other source\n//var data = \"JgBMAnM3ECkQKRANEAwRDQ8pEAwQDRApDyoQDQ8pEA0QDRAoECkQDRAoEigQDBEMECkRDBAMECkQDRAMEA0QDRAMEA0QDRANDw4PDQ8NEA0PDRANEA0RDA8NEAwRDBAMESgQDRAMEA0QDRAMESgQKRANEAwRDBApDyoQDBApEA4PDBILEQwQDRAoESgRDBApECkQDBANECkQDBANECgRDBANECkQDBEoEQwQKQ8NEA0QKQ8qEAwQDRAMEA0QDQ8NEA0QDBEMEAwRDQ8ODwwRDBAMEA0QDRAMEA0QDBANEQwQDRAMEA4PDRANEAwQDBANEA0QDBEMEAwQDRAMEA4PDBEMEA0PDRANEAwRDQ4OEAwRDBEMEAwQDRANECgQKRApECkQDBEMEAACMnc4ECgQKRANEQwQDQ8pEQwQDQ8qECgQDRApEA0QDBEoECkQDBEoECkQDRAMECkQDRAMECkQDRANEAwQDRANDw0QDQ8NEQwQDBEMEA0PDRENDw0QDBANDw0QDRANECgRDBAMEA0QDRAMECkRKBANEAwRDBApECkQDBEoEQwQDRAMEA0QDBApECkQDRApECgQDRANECgRDBANECgRDBANECgRDBApEAwQKRANEAwRKBApEQwQDBEMEA0QDBEMEA0QDQ8NDw0RDBAMEQwQDRAMEA0QDBEMEA0QDBANEAwQDRANEAwQDRANEAwQDRAMEA0QDRAMEA0QDBANEA0RCxILEQwQDBEMEA0QDBEMEA0QDQ8NEQwQDBANECkPKhApECkQDBANEAANBQAAAAAAAAAAAAAAAA==\"\n\nmsg.payload={\n    //\"mac\":\"MAC address of your broadlink rm\",  // Optional if configured in the RM node\n    //\"host\":\"IP address of your broadlink rm\",  // Optional if configured in the RM node\n    \"action\":\"send\",\n    \"data\":data,\n    \"repeat\":2\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 490,
+        "y": 440,
+        "wires": [
+            [
+                "11ec9b23631c6d8e"
+            ]
+        ]
+    },
+    {
+        "id": "d2b1a65ac836b074",
+        "type": "comment",
+        "z": "942e07cd47802559",
+        "name": "20°C",
+        "info": "",
+        "x": 280,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "89f838962d9a5a21",
+        "type": "inject",
+        "z": "942e07cd47802559",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 320,
+        "y": 840,
+        "wires": [
+            [
+                "704625630ab9b2a4"
+            ]
+        ]
+    },
+    {
+        "id": "7e8774e22ca4b504",
+        "type": "template",
+        "z": "942e07cd47802559",
+        "name": "",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "{{payload.data}}",
+        "output": "str",
+        "x": 820,
+        "y": 840,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "84f2ea0090fc7d35",
+        "type": "RM",
+        "z": "942e07cd47802559",
+        "name": "RM4PRO",
+        "device": "bba3afebcd73c7bb",
+        "action": "_msg_",
+        "remote": "",
+        "button": "",
+        "fix": 1,
+        "RFSweep": "false",
+        "x": 640,
+        "y": 840,
+        "wires": [
+            [
+                "7e8774e22ca4b504"
+            ]
+        ]
+    },
+    {
+        "id": "704625630ab9b2a4",
+        "type": "function",
+        "z": "942e07cd47802559",
+        "name": "function 12",
+        "func": "//Insert learned data object here\nvar data = [38,0,136,0,0,1,33,144,19,17,18,18,18,18,18,54,19,17,18,18,18,18,18,18,18,54,18,55,17,19,18,17,18,54,19,18,17,19,18,17,19,53,19,55,17,55,17,18,19,17,18,19,17,18,18,54,19,17,18,19,18,17,18,54,19,54,18,54,18,54,18,19,18,0,5,153,0,1,33,72,18,0,12,19,0,1,33,72,19,0,12,19,0,1,33,72,18,0,12,20,0,1,33,72,18,0,12,19,0,1,33,72,18,0,12,20,0,1,33,72,17,0,12,21,0,1,32,73,18,0,12,19,0,1,33,72,19,0,13,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];\n// or Base64 encoded format from other source\n//var data = \"JgBMAnM3ECkQKRANEAwRDQ8pEAwQDRApDyoQDQ8pEA0QDRAoECkQDRAoEigQDBEMECkRDBAMECkQDRAMEA0QDRAMEA0QDRANDw4PDQ8NEA0PDRANEA0RDA8NEAwRDBAMESgQDRAMEA0QDRAMESgQKRANEAwRDBApDyoQDBApEA4PDBILEQwQDRAoESgRDBApECkQDBANECkQDBANECgRDBANECkQDBEoEQwQKQ8NEA0QKQ8qEAwQDRAMEA0QDQ8NEA0QDBEMEAwRDQ8ODwwRDBAMEA0QDRAMEA0QDBANEQwQDRAMEA4PDRANEAwQDBANEA0QDBEMEAwQDRAMEA4PDBEMEA0PDRANEAwRDQ4OEAwRDBEMEAwQDRANECgQKRApECkQDBEMEAACMnc4ECgQKRANEQwQDQ8pEQwQDQ8qECgQDRApEA0QDBEoECkQDBEoECkQDRAMECkQDRAMECkQDRANEAwQDRANDw0QDQ8NEQwQDBEMEA0PDRENDw0QDBANDw0QDRANECgRDBAMEA0QDRAMECkRKBANEAwRDBApECkQDBEoEQwQDRAMEA0QDBApECkQDRApECgQDRANECgRDBANECgRDBANECgRDBApEAwQKRANEAwRKBApEQwQDBEMEA0QDBEMEA0QDQ8NDw0RDBAMEQwQDRAMEA0QDBEMEA0QDBANEAwQDRANEAwQDRANEAwQDRAMEA0QDRAMEA0QDBANEA0RCxILEQwQDBEMEA0QDBEMEA0QDQ8NEQwQDBANECkPKhApECkQDBANEAANBQAAAAAAAAAAAAAAAA==\"\n\nmsg.payload={\n    //\"mac\":\"MAC address of your broadlink rm\",  // Optional if configured in the RM node\n    //\"host\":\"IP address of your broadlink rm\",  // Optional if configured in the RM node\n    \"action\":\"send\",\n    \"data\":data,\n    \"repeat\":2\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 490,
+        "y": 840,
+        "wires": [
+            [
+                "84f2ea0090fc7d35"
+            ]
+        ]
+    },
+    {
+        "id": "16d0b195d92009ae",
+        "type": "comment",
+        "z": "942e07cd47802559",
+        "name": "Proyektor ON",
+        "info": "",
+        "x": 340,
+        "y": 800,
+        "wires": []
+    },
+    {
+        "id": "10872720a0d9c791",
+        "type": "inject",
+        "z": "942e07cd47802559",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 320,
+        "y": 540,
+        "wires": [
+            [
+                "e91bcb34262182d4"
+            ]
+        ]
+    },
+    {
+        "id": "ec04c9f00309ef08",
+        "type": "template",
+        "z": "942e07cd47802559",
+        "name": "",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "{{payload.data}}",
+        "output": "str",
+        "x": 820,
+        "y": 540,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "cc59a1101a0925ee",
+        "type": "RM",
+        "z": "942e07cd47802559",
+        "name": "RM4PRO",
+        "device": "bba3afebcd73c7bb",
+        "action": "_msg_",
+        "remote": "",
+        "button": "",
+        "fix": 1,
+        "RFSweep": "false",
+        "x": 640,
+        "y": 540,
+        "wires": [
+            [
+                "ec04c9f00309ef08"
+            ]
+        ]
+    },
+    {
+        "id": "e91bcb34262182d4",
+        "type": "function",
+        "z": "942e07cd47802559",
+        "name": "function 13",
+        "func": "//Insert learned data object here\nvar data = [38,0,200,0,194,237,17,18,17,18,17,18,17,19,16,18,16,20,16,18,18,18,17,18,16,19,17,19,16,18,18,18,16,18,18,18,16,19,17,18,17,18,17,18,18,17,17,19,17,18,16,19,17,18,17,18,17,19,16,18,17,19,16,18,18,51,18,18,16,19,17,18,18,17,17,18,17,19,16,19,17,18,16,19,17,18,17,18,17,19,16,18,17,19,16,19,17,18,16,19,17,18,16,20,16,18,18,18,16,18,18,18,16,19,17,18,17,19,16,18,18,51,18,18,16,52,18,18,16,53,15,53,17,19,17,18,17,18,17,18,17,18,17,19,16,18,18,18,16,53,16,19,17,52,17,18,16,19,17,19,16,52,16,19,17,19,16,52,17,19,16,53,16,18,18,18,15,54,16,19,17,52,16,53,16,19,17,18,16,19,17,52,17,18,17,52,17,52,17,236,16,0,13,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];\n// or Base64 encoded format from other source\n//var data = \"JgBMAnM3ECkQKRANEAwRDQ8pEAwQDRApDyoQDQ8pEA0QDRAoECkQDRAoEigQDBEMECkRDBAMECkQDRAMEA0QDRAMEA0QDRANDw4PDQ8NEA0PDRANEA0RDA8NEAwRDBAMESgQDRAMEA0QDRAMESgQKRANEAwRDBApDyoQDBApEA4PDBILEQwQDRAoESgRDBApECkQDBANECkQDBANECgRDBANECkQDBEoEQwQKQ8NEA0QKQ8qEAwQDRAMEA0QDQ8NEA0QDBEMEAwRDQ8ODwwRDBAMEA0QDRAMEA0QDBANEQwQDRAMEA4PDRANEAwQDBANEA0QDBEMEAwQDRAMEA4PDBEMEA0PDRANEAwRDQ4OEAwRDBEMEAwQDRANECgQKRApECkQDBEMEAACMnc4ECgQKRANEQwQDQ8pEQwQDQ8qECgQDRApEA0QDBEoECkQDBEoECkQDRAMECkQDRAMECkQDRANEAwQDRANDw0QDQ8NEQwQDBEMEA0PDRENDw0QDBANDw0QDRANECgRDBAMEA0QDRAMECkRKBANEAwRDBApECkQDBEoEQwQDRAMEA0QDBApECkQDRApECgQDRANECgRDBANECgRDBANECgRDBApEAwQKRANEAwRKBApEQwQDBEMEA0QDBEMEA0QDQ8NDw0RDBAMEQwQDRAMEA0QDBEMEA0QDBANEAwQDRANEAwQDRANEAwQDRAMEA0QDRAMEA0QDBANEA0RCxILEQwQDBEMEA0QDBEMEA0QDQ8NEQwQDBANECkPKhApECkQDBANEAANBQAAAAAAAAAAAAAAAA==\"\n\nmsg.payload={\n    //\"mac\":\"MAC address of your broadlink rm\",  // Optional if configured in the RM node\n    //\"host\":\"IP address of your broadlink rm\",  // Optional if configured in the RM node\n    \"action\":\"send\",\n    \"data\":data,\n    \"repeat\":2\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 490,
+        "y": 540,
+        "wires": [
+            [
+                "cc59a1101a0925ee"
+            ]
+        ]
+    },
+    {
+        "id": "bd34d6b3e30e6e2d",
+        "type": "comment",
+        "z": "942e07cd47802559",
+        "name": "18°C",
+        "info": "",
+        "x": 280,
+        "y": 500,
+        "wires": []
+    },
+    {
+        "id": "15323f28a2cd71d3",
+        "type": "inject",
+        "z": "942e07cd47802559",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 320,
+        "y": 640,
+        "wires": [
+            [
+                "6e140b62e35610a2"
+            ]
+        ]
+    },
+    {
+        "id": "7c461d596fbe5f95",
+        "type": "template",
+        "z": "942e07cd47802559",
+        "name": "",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "{{payload.data}}",
+        "output": "str",
+        "x": 820,
+        "y": 640,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "9800e12872dc24f9",
+        "type": "RM",
+        "z": "942e07cd47802559",
+        "name": "RM4PRO",
+        "device": "bba3afebcd73c7bb",
+        "action": "_msg_",
+        "remote": "",
+        "button": "",
+        "fix": 1,
+        "RFSweep": "false",
+        "x": 640,
+        "y": 640,
+        "wires": [
+            [
+                "7c461d596fbe5f95"
+            ]
+        ]
+    },
+    {
+        "id": "6e140b62e35610a2",
+        "type": "function",
+        "z": "942e07cd47802559",
+        "name": "function 14",
+        "func": "//Insert learned data object here\nvar data = [38,0,200,0,194,237,16,19,16,20,15,20,16,19,16,18,18,18,16,19,17,18,16,19,17,18,17,19,16,19,16,19,16,19,17,18,17,18,16,19,17,18,16,21,15,18,18,18,16,19,17,18,17,19,16,18,17,19,15,19,17,19,16,19,17,52,16,19,17,18,16,20,16,19,15,20,16,19,16,19,17,18,17,19,16,20,15,18,18,19,15,18,17,19,16,20,15,19,17,19,16,18,18,18,16,20,16,19,15,20,17,17,17,18,16,20,16,19,16,19,17,53,14,21,15,53,16,19,17,52,17,53,15,20,15,20,16,18,16,20,15,20,17,18,16,20,15,19,16,54,15,19,17,18,17,18,18,18,15,20,16,54,14,19,17,19,16,53,15,21,16,53,15,19,17,18,16,53,15,21,16,53,16,53,14,54,16,53,16,52,17,19,15,21,16,53,15,53,15,238,15,0,13,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];\n// or Base64 encoded format from other source\n//var data = \"JgBMAnM3ECkQKRANEAwRDQ8pEAwQDRApDyoQDQ8pEA0QDRAoECkQDRAoEigQDBEMECkRDBAMECkQDRAMEA0QDRAMEA0QDRANDw4PDQ8NEA0PDRANEA0RDA8NEAwRDBAMESgQDRAMEA0QDRAMESgQKRANEAwRDBApDyoQDBApEA4PDBILEQwQDRAoESgRDBApECkQDBANECkQDBANECgRDBANECkQDBEoEQwQKQ8NEA0QKQ8qEAwQDRAMEA0QDQ8NEA0QDBEMEAwRDQ8ODwwRDBAMEA0QDRAMEA0QDBANEQwQDRAMEA4PDRANEAwQDBANEA0QDBEMEAwQDRAMEA4PDBEMEA0PDRANEAwRDQ4OEAwRDBEMEAwQDRANECgQKRApECkQDBEMEAACMnc4ECgQKRANEQwQDQ8pEQwQDQ8qECgQDRApEA0QDBEoECkQDBEoECkQDRAMECkQDRAMECkQDRANEAwQDRANDw0QDQ8NEQwQDBEMEA0PDRENDw0QDBANDw0QDRANECgRDBAMEA0QDRAMECkRKBANEAwRDBApECkQDBEoEQwQDRAMEA0QDBApECkQDRApECgQDRANECgRDBANECgRDBANECgRDBApEAwQKRANEAwRKBApEQwQDBEMEA0QDBEMEA0QDQ8NDw0RDBAMEQwQDRAMEA0QDBEMEA0QDBANEAwQDRANEAwQDRANEAwQDRAMEA0QDRAMEA0QDBANEA0RCxILEQwQDBEMEA0QDBEMEA0QDQ8NEQwQDBANECkPKhApECkQDBANEAANBQAAAAAAAAAAAAAAAA==\"\n\nmsg.payload={\n    //\"mac\":\"MAC address of your broadlink rm\",  // Optional if configured in the RM node\n    //\"host\":\"IP address of your broadlink rm\",  // Optional if configured in the RM node\n    \"action\":\"send\",\n    \"data\":data,\n    \"repeat\":2\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 490,
+        "y": 640,
+        "wires": [
+            [
+                "9800e12872dc24f9"
+            ]
+        ]
+    },
+    {
+        "id": "58b650f1dbfc4c0f",
+        "type": "comment",
+        "z": "942e07cd47802559",
+        "name": "16°C",
+        "info": "",
+        "x": 280,
+        "y": 600,
+        "wires": []
+    },
+    {
+        "id": "29fb7d9c94cff3b4",
+        "type": "inject",
+        "z": "942e07cd47802559",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 320,
+        "y": 940,
+        "wires": [
+            [
+                "c5df85edfb75a55c",
+                "1aa8a47a1955f950"
+            ]
+        ]
+    },
+    {
+        "id": "c80e894cbfe54740",
+        "type": "template",
+        "z": "942e07cd47802559",
+        "name": "",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "{{payload.data}}",
+        "output": "str",
+        "x": 1000,
+        "y": 940,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "d85d2e43c3062a83",
+        "type": "RM",
+        "z": "942e07cd47802559",
+        "name": "RM4PRO",
+        "device": "bba3afebcd73c7bb",
+        "action": "_msg_",
+        "remote": "",
+        "button": "",
+        "fix": 1,
+        "RFSweep": "false",
+        "x": 820,
+        "y": 940,
+        "wires": [
+            [
+                "c80e894cbfe54740"
+            ]
+        ]
+    },
+    {
+        "id": "c5df85edfb75a55c",
+        "type": "function",
+        "z": "942e07cd47802559",
+        "name": "function 37",
+        "func": "//Insert learned data object here\nvar data = [38,0,136,0,0,1,33,144,19,17,18,18,18,18,18,54,19,17,18,18,18,18,18,18,18,54,18,55,17,19,18,17,18,54,19,18,17,19,18,17,19,53,19,55,17,55,17,18,19,17,18,19,17,18,18,54,19,17,18,19,18,17,18,54,19,54,18,54,18,54,18,19,18,0,5,153,0,1,33,72,18,0,12,19,0,1,33,72,19,0,12,19,0,1,33,72,18,0,12,20,0,1,33,72,18,0,12,19,0,1,33,72,18,0,12,20,0,1,33,72,17,0,12,21,0,1,32,73,18,0,12,19,0,1,33,72,19,0,13,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];\n// or Base64 encoded format from other source\n//var data = \"JgBMAnM3ECkQKRANEAwRDQ8pEAwQDRApDyoQDQ8pEA0QDRAoECkQDRAoEigQDBEMECkRDBAMECkQDRAMEA0QDRAMEA0QDRANDw4PDQ8NEA0PDRANEA0RDA8NEAwRDBAMESgQDRAMEA0QDRAMESgQKRANEAwRDBApDyoQDBApEA4PDBILEQwQDRAoESgRDBApECkQDBANECkQDBANECgRDBANECkQDBEoEQwQKQ8NEA0QKQ8qEAwQDRAMEA0QDQ8NEA0QDBEMEAwRDQ8ODwwRDBAMEA0QDRAMEA0QDBANEQwQDRAMEA4PDRANEAwQDBANEA0QDBEMEAwQDRAMEA4PDBEMEA0PDRANEAwRDQ4OEAwRDBEMEAwQDRANECgQKRApECkQDBEMEAACMnc4ECgQKRANEQwQDQ8pEQwQDQ8qECgQDRApEA0QDBEoECkQDBEoECkQDRAMECkQDRAMECkQDRANEAwQDRANDw0QDQ8NEQwQDBEMEA0PDRENDw0QDBANDw0QDRANECgRDBAMEA0QDRAMECkRKBANEAwRDBApECkQDBEoEQwQDRAMEA0QDBApECkQDRApECgQDRANECgRDBANECgRDBANECgRDBApEAwQKRANEAwRKBApEQwQDBEMEA0QDBEMEA0QDQ8NDw0RDBAMEQwQDRAMEA0QDBEMEA0QDBANEAwQDRANEAwQDRANEAwQDRAMEA0QDRAMEA0QDBANEA0RCxILEQwQDBEMEA0QDBEMEA0QDQ8NEQwQDBANECkPKhApECkQDBANEAANBQAAAAAAAAAAAAAAAA==\"\n\nmsg.payload={\n    //\"mac\":\"MAC address of your broadlink rm\",  // Optional if configured in the RM node\n    //\"host\":\"IP address of your broadlink rm\",  // Optional if configured in the RM node\n    \"action\":\"send\",\n    \"data\":data,\n    \"repeat\":2\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 670,
+        "y": 940,
+        "wires": [
+            [
+                "d85d2e43c3062a83"
+            ]
+        ]
+    },
+    {
+        "id": "fa5c9532512680b9",
+        "type": "comment",
+        "z": "942e07cd47802559",
+        "name": "Proyektor OFF",
+        "info": "",
+        "x": 320,
+        "y": 900,
+        "wires": []
+    },
+    {
+        "id": "1aa8a47a1955f950",
+        "type": "delay",
+        "z": "942e07cd47802559",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "2",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 500,
+        "y": 960,
+        "wires": [
+            [
+                "c5df85edfb75a55c"
+            ]
+        ]
+    },
+    {
+        "id": "46394e9ba8ce4120",
+        "type": "link in",
+        "z": "942e07cd47802559",
+        "name": "link in 2",
+        "links": [
+            "664a64e3007f93ee"
+        ],
+        "x": 35,
+        "y": 240,
+        "wires": [
+            [
+                "704625630ab9b2a4",
+                "e71db3c4b1c1f11e",
+                "1221ed44e9ceb0dc"
+            ]
+        ]
+    },
+    {
+        "id": "9e590cbf33756c23",
+        "type": "tcp in",
+        "z": "942e07cd47802559",
+        "name": "",
+        "server": "server",
+        "host": "",
+        "port": "807",
+        "datamode": "stream",
+        "datatype": "buffer",
+        "newline": "",
+        "topic": "",
+        "trim": false,
+        "base64": false,
+        "tls": "",
+        "x": 90,
+        "y": 700,
+        "wires": [
+            [
+                "1aa8a47a1955f950",
+                "f24c496a79afdd2a",
+                "eaa042560a442e35"
+            ]
+        ]
+    },
+    {
+        "id": "f24c496a79afdd2a",
+        "type": "delay",
+        "z": "942e07cd47802559",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "16",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 440,
+        "y": 700,
+        "wires": [
+            [
+                "144d283b87168d00"
+            ]
+        ]
+    },
+    {
+        "id": "eaa042560a442e35",
+        "type": "delay",
+        "z": "942e07cd47802559",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "4",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 500,
+        "y": 900,
+        "wires": [
+            [
+                "c5df85edfb75a55c"
+            ]
+        ]
+    },
+    {
+        "id": "e71db3c4b1c1f11e",
+        "type": "delay",
+        "z": "942e07cd47802559",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "4",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 160,
+        "y": 200,
+        "wires": [
+            [
+                "12484022668f6ea3"
+            ]
+        ]
+    },
+    {
+        "id": "1221ed44e9ceb0dc",
+        "type": "delay",
+        "z": "942e07cd47802559",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "8",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 160,
+        "y": 240,
+        "wires": [
+            [
+                "12484022668f6ea3"
+            ]
+        ]
+    },
+    {
+        "id": "bba3afebcd73c7bb",
+        "type": "rmdevice",
+        "folder": "",
+        "mac": "e87072dec0ea",
+        "host": "10.12.1.43",
+        "devType": "520b"
+    },
+    {
+        "id": "c885fbe044f294a8",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-broadlink-control": "2.1.6"
+        }
+    }
+]
