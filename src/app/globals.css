@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: linear-gradient(135deg, #ffffff 0%, #cbcbcb 100%);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  min-height: 100vh;
+}
+
+.gradient-primary {
+  background: linear-gradient(135deg, #201547 0%, #483688 100%);
+}
+
+.gradient-secondary {
+  background: linear-gradient(135deg, #483688 0%, #d8ae47 100%);
+}
+
+.card-shadow {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.smooth-transition {
+  transition: all 0.3s ease-in-out;
+}

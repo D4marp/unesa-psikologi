@@ -1,0 +1,210 @@
+'use client'
+
+import { Power, AlertCircle, Settings, Zap, Gauge, Menu } from 'lucide-react'
+import Link from 'next/link'
+import Image from 'next/image'
+import { useState, useEffect } from 'react'
+import { devicesAPI } from '@/lib/apiClient'
+
+interface Device {
+  id: number
+  device_eui: string
+  device_name: string
+  device_type: string
+  application_type: string
+  location: string
+  current_power: number
+  current_temperature: number
+  iot_status: string
+}
+
+export default function DevicesPage() {
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [selectedClass, setSelectedClass] = useState('All')
+  const [devices, setDevices] = useState<Device[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [classes, setClasses] = useState(['All'])
+
+  // Load devices from backend API
+  useEffect(() => {
+    const loadDevices = async () => {
+      try {
+        setLoading(true)
+        const devicesData = await devicesAPI.getAll()
+        setDevices(devicesData || [])
+        
+        // Extract unique locations
+        if (devicesData && devicesData.length > 0) {
+          const uniqueClasses = ['All', ...new Set(devicesData.map((d: Device) => d.location))]
+          setClasses(uniqueClasses)
+        }
+        
+        setError(null)
+      } catch (err) {
+        console.error('Error loading devices:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load devices')
+        setDevices([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDevices()
+  }, [])
+
+  const filteredDevices = selectedClass === 'All' 
+    ? devices 
+    : devices.filter(d => d.location === selectedClass)
+
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-gray-50 items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Memuat data perangkat...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-50" style={{
+      backgroundImage: 'url(/assets/bg_image.png)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed'
+    }}>
+      {/* Semi-transparent overlay */}
+      <div className="absolute inset-0 bg-white/40 pointer-events-none"></div>
+      <aside className={`${sidebarOpen ? 'w-64' : 'w-20'} gradient-primary text-white transition-all duration-300 flex flex-col shadow-xl relative z-20`}>
+        <div className="p-4 flex items-center justify-between">
+          {sidebarOpen && (
+            <div className="flex-1 w-full h-auto">
+              <Image src="/logo_unesa.png" alt="UNESA Logo" width={240} height={80} priority className="w-full h-auto object-contain" />
+            </div>
+          )}
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-white/20 rounded-lg">
+            <Menu size={20} />
+          </button>
+        </div>
+
+        <nav className="flex-1 px-3 space-y-2">
+          <NavLink href="/" icon={<Zap size={20} />} label="Dasbor" sidebarOpen={sidebarOpen} />
+          <NavLink href="/devices" icon={<Gauge size={20} />} label="Perangkat" active sidebarOpen={sidebarOpen} />
+          <NavLink href="/analytics" icon={<Power size={20} />} label="Analitik" sidebarOpen={sidebarOpen} />
+          <NavLink href="/alerts" icon={<AlertCircle size={20} />} label="Pemberitahuan" sidebarOpen={sidebarOpen} />
+        </nav>
+
+        <div className="px-3 pb-6 space-y-2 border-t border-white/20 pt-4">
+          <NavLink href="/settings" icon={<Settings size={20} />} label="Pengaturan" sidebarOpen={sidebarOpen} />
+        </div>
+      </aside>
+
+      <main className="flex-1 overflow-auto relative z-10">
+        {error && (
+          <div className="mx-8 mt-6 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-yellow-800">
+            Gagal mengambil data perangkat. Halaman tetap tersedia dengan data kosong.
+          </div>
+        )}
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="px-8 py-6">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">Perangkat.</h2>
+                <p className="text-gray-500 mt-1">Status dan Monitoring Perangkat per Lokasi</p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 pt-4 border-t border-gray-200">
+              <span className="text-sm font-semibold text-gray-700">Filter Lokasi:</span>
+              <div className="flex space-x-2 flex-wrap">
+                {classes.map((cls) => (
+                  <button key={cls} onClick={() => setSelectedClass(cls)} className={`px-3 py-2 rounded-lg font-medium smooth-transition text-sm ${selectedClass === cls ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                    {cls}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="p-8">
+          <div className="grid grid-cols-1 gap-6">
+            {filteredDevices.length > 0 ? (
+              filteredDevices.map((device) => (
+                <div key={device.id} className="bg-white rounded-xl shadow-md p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <p className="text-sm text-gray-500">{device.location}</p>
+                          <h3 className="text-lg font-bold text-gray-900 mt-1">{device.device_name}</h3>
+                          <p className="text-xs text-gray-400 font-mono mt-1">{device.device_eui}</p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${device.iot_status === 'online' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                          {device.iot_status === 'online' ? '● Online' : '○ Offline'}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Daya</span>
+                          <span className="font-semibold">{(parseFloat(String(device.current_power)) || 0).toFixed(2)} kW</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Suhu</span>
+                          <span className="font-semibold">{(parseFloat(String(device.current_temperature)) || 0).toFixed(1)}°C</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Tipe</span>
+                          <span className="font-semibold text-blue-600">{device.device_type}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Aplikasi</span>
+                          <span className="font-semibold text-green-600">{device.application_type}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div></div>
+
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-4">Info Perangkat</h4>
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <p className="text-gray-500">Status IoT</p>
+                          <p className="font-medium text-gray-900">{device.iot_status}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Jenis Perangkat</p>
+                          <p className="font-medium text-gray-900">{device.device_type}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">EUI Perangkat</p>
+                          <p className="font-medium text-gray-900 font-mono text-xs">{device.device_eui}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-gray-600">Tidak ada perangkat ditemukan</p>
+              </div>
+            )}
+            </div>
+          </div>
+        </main>
+    </div>
+  )
+}
+
+function NavLink({ href, icon, label, active = false, sidebarOpen }: any) {
+  return (
+    <Link href={href} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg smooth-transition ${active ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10'}`}>
+      {icon}
+      {sidebarOpen && <span className="text-sm font-medium">{label}</span>}
+    </Link>
+  )
+}
