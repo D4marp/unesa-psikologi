@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
 // Import database connection
@@ -12,6 +13,8 @@ const deviceRoutes = require('./routes/deviceRoutes');
 const consumptionRoutes = require('./routes/consumptionRoutes');
 const alertRoutes = require('./routes/alertRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 
@@ -31,6 +34,7 @@ app.use(cors({
   },
   credentials: true
 }));
+app.use(cookieParser());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
@@ -47,6 +51,8 @@ app.use(`${apiPrefix}/devices`, deviceRoutes);
 app.use(`${apiPrefix}/consumption`, consumptionRoutes);
 app.use(`${apiPrefix}/alerts`, alertRoutes);
 app.use(`${apiPrefix}/settings`, settingsRoutes);
+app.use(`${apiPrefix}/auth`, authRoutes);
+app.use(`${apiPrefix}/users`, userRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

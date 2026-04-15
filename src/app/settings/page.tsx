@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { Menu, Settings, Save, ChevronRight, Bell, Lock, Eye, Mail, Smartphone, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { settingsAPI } from '@/lib/apiClient'
+import { authAPI, settingsAPI } from '@/lib/apiClient'
+import { useAuth } from '@/components/AuthProvider'
 
 interface Setting {
   key: string
@@ -12,12 +13,31 @@ interface Setting {
   description?: string
 }
 
+const SETTINGS_KEY_MAP: Record<string, string> = {
+  timezone: 'timezone',
+  language: 'language',
+  theme: 'theme',
+  emailNotifications: 'email_notifications',
+  smsNotifications: 'sms_notifications',
+  pushNotifications: 'push_notifications',
+  alertSeverity: 'alert_severity',
+  consumptionThreshold: 'consumption_alert_threshold',
+  temperatureThreshold: 'temperature_alert_threshold',
+  costThreshold: 'cost_threshold',
+  twoFactor: 'two_factor',
+  sessionTimeout: 'session_timeout',
+  autoLogout: 'auto_logout',
+}
+
 export default function SettingsPage() {
+  const { user, refreshUser } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activeTab, setActiveTab] = useState('general')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isProfileSaving, setIsProfileSaving] = useState(false)
+  const [profile, setProfile] = useState({ full_name: '', email: '', password: '', phone: '' })
   const [settings, setSettings] = useState({
     // General
     timezone: 'Asia/Jakarta',
@@ -47,19 +67,26 @@ export default function SettingsPage() {
       try {
         setLoading(true)
         const apiSettings = await settingsAPI.getAll()
+        const me = await authAPI.me()
         
         // Merge API settings with defaults
         const mergedSettings = { ...settings }
         apiSettings.forEach((setting: Setting) => {
-          const key = setting.key.replace(/\./g, '_')
-          if (key in mergedSettings) {
+          const uiKey = Object.keys(SETTINGS_KEY_MAP).find((k) => SETTINGS_KEY_MAP[k] === setting.key)
+          if (uiKey && uiKey in mergedSettings) {
             const value = setting.value
             const parsedValue = value === 'true' ? true : value === 'false' ? false : isNaN(Number(value)) ? value : Number(value)
-            ;(mergedSettings as any)[key] = parsedValue
+            ;(mergedSettings as any)[uiKey] = parsedValue
           }
         })
         
         setSettings(mergedSettings)
+        setProfile({
+          full_name: me.full_name || '',
+          email: me.email || '',
+          password: '',
+          phone: '',
+        })
         setError(null)
       } catch (err) {
         console.error('Error loading settings:', err)
@@ -86,8 +113,12 @@ export default function SettingsPage() {
       
       // Save each setting
       for (const [key, value] of Object.entries(settings)) {
+        const apiKey = SETTINGS_KEY_MAP[key]
+        if (!apiKey) {
+          continue
+        }
         await settingsAPI.update(
-          key.replace(/_/g, '.'),
+          apiKey,
           String(value)
         )
       }
@@ -99,6 +130,24 @@ export default function SettingsPage() {
       setError(err instanceof Error ? err.message : 'Failed to save settings')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleSaveProfile = async () => {
+    try {
+      setIsProfileSaving(true)
+      await authAPI.updateProfile({
+        full_name: profile.full_name,
+        email: profile.email,
+        password: profile.password || undefined,
+      })
+      await refreshUser()
+      setProfile((prev) => ({ ...prev, password: '' }))
+      alert('Profil berhasil diperbarui!')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update profile')
+    } finally {
+      setIsProfileSaving(false)
     }
   }
 
@@ -239,9 +288,9 @@ export default function SettingsPage() {
                       onChange={(e) => handleChange('language', e.target.value)}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary"
                     >
-                      <option>Indonesia</option>
-                      <option>English</option>
-                      <option>Thai</option>
+                      <option value="id">Indonesia</option>
+                      <option value="en">English</option>
+                      <option value="th">Thai</option>
                     </select>
                   </SettingItem>
 
@@ -254,9 +303,9 @@ export default function SettingsPage() {
                       onChange={(e) => handleChange('theme', e.target.value)}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary"
                     >
-                      <option>Terang</option>
-                      <option>Gelap</option>
-                      <option>Otomatis</option>
+                      <option value="light">Terang</option>
+                      <option value="dark">Gelap</option>
+                      <option value="auto">Otomatis</option>
                     </select>
                   </SettingItem>
                 </div>
@@ -399,9 +448,9 @@ export default function SettingsPage() {
                     <label className="block text-sm font-semibold text-gray-900 mb-2">Account Email</label>
                     <input
                       type="email"
-                      defaultValue="user@example.com"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100"
-                      disabled
+                      value={profile.email}
+                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary"
                     />
                   </div>
 
@@ -409,7 +458,8 @@ export default function SettingsPage() {
                     <label className="block text-sm font-semibold text-gray-900 mb-2">Full Name</label>
                     <input
                       type="text"
-                      defaultValue="John Doe"
+                      value={profile.full_name}
+                      onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary"
                     />
                   </div>
@@ -418,10 +468,33 @@ export default function SettingsPage() {
                     <label className="block text-sm font-semibold text-gray-900 mb-2">Phone Number</label>
                     <input
                       type="tel"
-                      defaultValue="+62 821 1234 5678"
+                      value={profile.phone}
+                      onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-2">Password Baru (opsional)</label>
+                    <input
+                      type="password"
+                      value={profile.password}
+                      onChange={(e) => setProfile({ ...profile, password: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-600">
+                    Role aktif: <span className="font-semibold text-gray-900">{user?.role || '-'}</span>
+                  </div>
+
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={isProfileSaving}
+                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isProfileSaving ? 'Menyimpan profil...' : 'Simpan Profil'}
+                  </button>
 
                   <hr className="my-4" />
 

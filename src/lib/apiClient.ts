@@ -25,6 +25,7 @@ async function apiCall<T>(
   const url = `${API_BASE_URL}${endpoint}`;
   
   const response = await fetch(url, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -118,6 +119,28 @@ export const devicesAPI = {
     return response.data;
   },
 
+  control: async (id: number, action: 'on' | 'off') => {
+    const response = await apiCall<{ success: boolean; data: any }>(
+      `/devices/${id}/control`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ action }),
+      }
+    );
+    return response.data;
+  },
+
+  controlByClass: async (classCode: string, action: 'on' | 'off') => {
+    const response = await apiCall<{ success: boolean; data: any }>(
+      `/devices/class-code/${encodeURIComponent(classCode)}/control`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ action }),
+      }
+    );
+    return response.data;
+  },
+
   delete: async (id: number) => {
     const response = await apiCall<{ success: boolean; data: any }>(
       `/devices/${id}`,
@@ -156,6 +179,20 @@ export const consumptionAPI = {
     const classQuery = classId ? `&classId=${classId}` : '';
     const response = await apiCall<{ success: boolean; data: any[] }>(
       `/consumption/monthly-trend-summary?months=${months}${classQuery}`
+    );
+    return response.data;
+  },
+
+  getTotalByClass: async (classId: number, startDate: string, endDate: string) => {
+    const response = await apiCall<{ success: boolean; data: any[] }>(
+      `/consumption/total/class/${classId}?startDate=${startDate}&endDate=${endDate}`
+    );
+    return response.data;
+  },
+
+  getHourlyAggregatedByClass: async (classId: number, date: string) => {
+    const response = await apiCall<{ success: boolean; data: any[] }>(
+      `/consumption/hourly/class/${classId}?date=${date}`
     );
     return response.data;
   },
@@ -287,6 +324,75 @@ export const settingsAPI = {
         body: JSON.stringify(data),
       }
     );
+    return response.data;
+  },
+};
+
+// ============ AUTH API ============
+export const authAPI = {
+  login: async (email: string, password: string) => {
+    const response = await apiCall<{ success: boolean; data: { token: string; user: any } }>(
+      '/auth/login',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      }
+    );
+    return response.data;
+  },
+
+  me: async () => {
+    const response = await apiCall<{ success: boolean; data: any }>('/auth/me');
+    return response.data;
+  },
+
+  updateProfile: async (data: { full_name?: string; email?: string; password?: string }) => {
+    const response = await apiCall<{ success: boolean; data: any }>(
+      '/auth/profile',
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }
+    );
+    return response.data;
+  },
+
+  logout: async () => {
+    const response = await apiCall<{ success: boolean; message: string }>(
+      '/auth/logout',
+      { method: 'POST' }
+    );
+    return response;
+  },
+};
+
+// ============ USERS API ============
+export const usersAPI = {
+  getAll: async () => {
+    const response = await apiCall<{ success: boolean; data: any[] }>('/users');
+    return response.data;
+  },
+
+  create: async (data: any) => {
+    const response = await apiCall<{ success: boolean; data: any }>('/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response.data;
+  },
+
+  update: async (id: number, data: any) => {
+    const response = await apiCall<{ success: boolean; data: any }>(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    return response.data;
+  },
+
+  delete: async (id: number) => {
+    const response = await apiCall<{ success: boolean; message: string }>(`/users/${id}`, {
+      method: 'DELETE',
+    });
     return response.data;
   },
 };

@@ -30,6 +30,21 @@ class Device {
     }
   }
 
+  static async getByClassCode(classCode) {
+    try {
+      const [rows] = await db.query(`
+        SELECT d.*, c.name as class_name 
+        FROM devices d 
+        LEFT JOIN classes c ON d.class_id = c.id 
+        WHERE c.name = ? OR d.location = ?
+        ORDER BY d.device_name
+      `, [classCode, classCode]);
+      return rows;
+    } catch (error) {
+      throw new Error(`Database error: ${error.message}`);
+    }
+  }
+
   static async getById(id) {
     try {
       const [rows] = await db.query(`
@@ -154,9 +169,14 @@ class Device {
 
   static async updateStatus(id, status) {
     try {
+      const iotStatus = status === 'active' || status === 'idle' ? 'active' : 'inactive';
       const [result] = await db.query(
-        'UPDATE devices SET status = ? WHERE id = ?',
-        [status, id]
+        `UPDATE devices
+         SET status = ?,
+             iot_status = ?,
+             last_heartbeat = CASE WHEN ? IN ('active', 'idle') THEN NOW() ELSE last_heartbeat END
+         WHERE id = ?`,
+        [status, iotStatus, status, id]
       );
       return result;
     } catch (error) {
@@ -168,7 +188,12 @@ class Device {
     try {
       const [result] = await db.query(`
         UPDATE devices 
-        SET current_power = ?, current_temperature = ?, last_reading = NOW() 
+        SET current_power = ?,
+            current_temperature = ?,
+            last_reading = NOW(),
+            last_heartbeat = NOW(),
+            status = 'active',
+            iot_status = 'active'
         WHERE id = ?
       `, [power, temperature, id]);
       return result;

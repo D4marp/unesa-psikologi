@@ -153,6 +153,22 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Users table for SaaS login and user management
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    role ENUM('admin', 'manager', 'viewer') DEFAULT 'viewer',
+    is_active BOOLEAN DEFAULT TRUE,
+    last_login TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_email (email),
+    INDEX idx_role (role),
+    INDEX idx_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- IoT Uplink Messages - stores incoming data from IoT devices
 CREATE TABLE IF NOT EXISTS iot_uplink_messages (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -244,3 +260,7 @@ INSERT INTO settings (setting_key, setting_value, data_type, description) VALUES
 ('consumption_alert_threshold', '15', 'integer', 'Alert threshold for consumption'),
 ('temperature_alert_threshold', '70', 'integer', 'Alert threshold for temperature'),
 ('data_retention_days', '90', 'integer', 'Number of days to retain consumption data');
+
+-- Default SaaS admin account
+INSERT IGNORE INTO users (full_name, email, password, role, is_active) VALUES
+('System Administrator', 'admin@unesa.ac.id', '$2a$10$u0YP0gkl1Yl2jMrO6dWMr.24Bcwz7mYb6bW8tTnSf527jZ0dx3DwK', 'admin', TRUE);

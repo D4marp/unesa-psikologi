@@ -18,6 +18,9 @@ router.get('/count/unread', AlertController.getUnreadCount);
 // Get summary
 router.get('/summary/stats', AlertController.getSummary);
 
+// Create alert from raw device event payload
+router.post('/device-event', AlertController.createDeviceEvent);
+
 // Get alert by ID
 router.get('/:id', AlertController.getById);
 

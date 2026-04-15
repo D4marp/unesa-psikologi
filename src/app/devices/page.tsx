@@ -16,6 +16,13 @@ interface Device {
   current_power: number
   current_temperature: number
   iot_status: string
+  status?: string
+}
+
+function isDeviceOnline(device: Device): boolean {
+  const iot = String(device.iot_status || '').toLowerCase()
+  const status = String(device.status || '').toLowerCase()
+  return iot === 'online' || iot === 'active' || status === 'active' || status === 'idle'
 }
 
 export default function DevicesPage() {
@@ -25,6 +32,7 @@ export default function DevicesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [classes, setClasses] = useState(['All'])
+  const [classControlLoading, setClassControlLoading] = useState<Record<string, 'on' | 'off' | null>>({})
 
   // Load devices from backend API
   useEffect(() => {
@@ -56,6 +64,34 @@ export default function DevicesPage() {
   const filteredDevices = selectedClass === 'All' 
     ? devices 
     : devices.filter(d => d.location === selectedClass)
+
+  const visibleClassCodes = Array.from(new Set(filteredDevices.map((d) => d.location).filter(Boolean)))
+
+  const handleClassControl = async (classCode: string, action: 'on' | 'off') => {
+    try {
+      setClassControlLoading(prev => ({ ...prev, [classCode]: action }))
+      await devicesAPI.controlByClass(classCode, action)
+
+      setDevices(prev => prev.map(device => {
+        if (device.location !== classCode) {
+          return device
+        }
+
+        return {
+          ...device,
+          status: action === 'on' ? 'active' : 'idle',
+          iot_status: action === 'on' ? 'active' : 'inactive',
+        }
+      }))
+
+      setError(null)
+    } catch (err) {
+      console.error('Error controlling class devices:', err)
+      setError(err instanceof Error ? err.message : 'Gagal mengirim perintah ON/OFF kelas ke Node-RED')
+    } finally {
+      setClassControlLoading(prev => ({ ...prev, [classCode]: null }))
+    }
+  }
 
   if (loading) {
     return (
@@ -104,7 +140,7 @@ export default function DevicesPage() {
       <main className="flex-1 overflow-auto relative z-10">
         {error && (
           <div className="mx-8 mt-6 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-yellow-800">
-            Gagal mengambil data perangkat. Halaman tetap tersedia dengan data kosong.
+            Terjadi kendala saat memuat atau mengontrol perangkat.
           </div>
         )}
         <header className="bg-white shadow-sm border-b border-gray-200">
@@ -130,11 +166,41 @@ export default function DevicesPage() {
         </header>
 
         <div className="p-8">
+          {visibleClassCodes.length > 0 && (
+            <div className="mb-6 rounded-xl bg-white p-6 shadow-md">
+              <h3 className="mb-4 text-lg font-semibold text-gray-900">Kontrol ON/OFF Per Kelas</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {visibleClassCodes.map((classCode) => (
+                  <div key={classCode} className="rounded-lg border border-gray-200 p-4">
+                    <p className="text-sm font-semibold text-gray-900">{classCode}</p>
+                    <p className="mt-1 text-xs text-gray-500">Perintah berlaku untuk semua perangkat di kelas ini.</p>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleClassControl(classCode, 'on')}
+                        disabled={Boolean(classControlLoading[classCode])}
+                        className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {classControlLoading[classCode] === 'on' ? 'Mengirim...' : 'ON'}
+                      </button>
+                      <button
+                        onClick={() => handleClassControl(classCode, 'off')}
+                        disabled={Boolean(classControlLoading[classCode])}
+                        className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {classControlLoading[classCode] === 'off' ? 'Mengirim...' : 'OFF'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-6">
             {filteredDevices.length > 0 ? (
               filteredDevices.map((device) => (
                 <div key={device.id} className="bg-white rounded-xl shadow-md p-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 gap-6">
                     <div>
                       <div className="flex justify-between items-start mb-4">
                         <div>
@@ -142,8 +208,8 @@ export default function DevicesPage() {
                           <h3 className="text-lg font-bold text-gray-900 mt-1">{device.device_name}</h3>
                           <p className="text-xs text-gray-400 font-mono mt-1">{device.device_eui}</p>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${device.iot_status === 'online' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                          {device.iot_status === 'online' ? '● Online' : '○ Offline'}
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${isDeviceOnline(device) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                          {isDeviceOnline(device) ? '● Online' : '○ Offline'}
                         </span>
                       </div>
                       <div className="space-y-2">
@@ -162,26 +228,6 @@ export default function DevicesPage() {
                         <div className="flex justify-between">
                           <span className="text-gray-600">Aplikasi</span>
                           <span className="font-semibold text-green-600">{device.application_type}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div></div>
-
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-900 mb-4">Info Perangkat</h4>
-                      <div className="space-y-3 text-sm">
-                        <div>
-                          <p className="text-gray-500">Status IoT</p>
-                          <p className="font-medium text-gray-900">{device.iot_status}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">Jenis Perangkat</p>
-                          <p className="font-medium text-gray-900">{device.device_type}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">EUI Perangkat</p>
-                          <p className="font-medium text-gray-900 font-mono text-xs">{device.device_eui}</p>
                         </div>
                       </div>
                     </div>

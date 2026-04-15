@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { devicesAPI, consumptionAPI } from '@/lib/apiClient'
+import { useAuth } from '@/components/AuthProvider'
 
 interface Device {
   id: number
@@ -24,6 +25,7 @@ interface Device {
   current_power: number
   current_temperature: number
   iot_status: string
+  status?: string
 }
 
 interface ChartDataPoint {
@@ -35,7 +37,14 @@ interface ChartDataPoint {
   sensorHumidity?: number
 }
 
+function isDeviceOnline(device: Device): boolean {
+  const iot = String(device.iot_status || '').toLowerCase()
+  const status = String(device.status || '').toLowerCase()
+  return iot === 'online' || iot === 'active' || status === 'active' || status === 'idle'
+}
+
 export default function Dashboard() {
+  const { user, logout } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [timeRange, setTimeRange] = useState('24h')
   const [selectedClass, setSelectedClass] = useState('All')
@@ -205,11 +214,15 @@ export default function Dashboard() {
           <NavItem icon={<Zap size={20} />} label="Perangkat" sidebarOpen={sidebarOpen} href="/devices" />
           <NavItem icon={<Gauge size={20} />} label="Analitik" sidebarOpen={sidebarOpen} href="/analytics" />
           <NavItem icon={<AlertCircle size={20} />} label="Pemberitahuan" sidebarOpen={sidebarOpen} href="/alerts" />
+          {user?.role === 'admin' && <NavItem icon={<Settings size={20} />} label="Pengguna" sidebarOpen={sidebarOpen} href="/users" />}
         </nav>
 
         <div className="px-3 pb-6 space-y-2 border-t border-white/20 pt-4">
           <NavItem icon={<Settings size={20} />} label="Pengaturan" sidebarOpen={sidebarOpen} href="/settings" />
-          <NavItem icon={<LogOut size={20} />} label="Keluar" sidebarOpen={sidebarOpen} href="/" />
+          <button onClick={logout} className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-white/70 hover:bg-white/10">
+            <LogOut size={20} />
+            {sidebarOpen && <span className="text-sm font-medium">Keluar</span>}
+          </button>
         </div>
       </aside>
 
@@ -316,7 +329,7 @@ export default function Dashboard() {
             />
             <KPICard
               title="Total Perangkat Aktif"
-              value={`${filteredDevices.filter(d => d.iot_status === 'online').length}`}
+              value={`${filteredDevices.filter((d) => isDeviceOnline(d)).length}`}
               change={`${sensorDevices.length} sensor`}
               icon={<Activity className="text-purple-500" size={20} />}
               bgColor="bg-purple-50"
@@ -410,13 +423,18 @@ export default function Dashboard() {
                         <td className="py-3 px-4 text-gray-600">{(parseFloat(String(device.current_temperature)) || 0).toFixed(1)}°C</td>
                         <td className="py-3 px-4 text-gray-600 text-xs font-mono">{device.device_eui}</td>
                         <td className="py-3 px-4">
+                          {(() => {
+                            const online = isDeviceOnline(device)
+                            return (
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            device.iot_status === 'online' 
+                            online
                               ? 'bg-green-100 text-green-700' 
                               : 'bg-gray-100 text-gray-700'
                           }`}>
-                            {device.iot_status === 'online' ? '● Online' : '○ Offline'}
+                            {online ? '● Online' : '○ Offline'}
                           </span>
+                            )
+                          })()}
                         </td>
                       </tr>
                     ))}

@@ -1,6 +1,31 @@
 const Alert = require('../models/Alert');
 
 class AlertController {
+  static buildDeviceEventAlert(body = {}) {
+    const eventDescription = body.eventDescription || 'Device event received';
+    const normalizedDescription = String(eventDescription).toLowerCase();
+    const isFailure = normalizedDescription.includes('failed') || normalizedDescription.includes('error') || normalizedDescription.includes('alarm');
+
+    return {
+      device_id: body.device_id || null,
+      class_id: body.class_id || null,
+      type: isFailure ? 'warning' : 'info',
+      title: `1T342MFX Event - ${body.major ?? 'N/A'}.${body.minor ?? 'N/A'}`,
+      message: [
+        eventDescription,
+        body.time ? `Time: ${body.time}` : null,
+        body.serialNo ? `Serial: ${body.serialNo}` : null,
+        body.currentVerifyMode ? `Verify: ${body.currentVerifyMode}` : null,
+        body.doorNo ? `Door: ${body.doorNo}` : null,
+      ].filter(Boolean).join(' | '),
+      severity: isFailure ? 'high' : 'medium',
+      metadata: {
+        source: '1T342MFX',
+        ...body,
+      },
+    };
+  }
+
   static async getAll(req, res) {
     try {
       const { type, severity, status, readStatus } = req.query;
@@ -123,6 +148,36 @@ class AlertController {
           title,
           message,
           severity
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
+  static async createDeviceEvent(req, res) {
+    try {
+      const payload = req.body || {};
+
+      if (!payload || typeof payload !== 'object') {
+        return res.status(400).json({
+          success: false,
+          message: 'Request body must be an object'
+        });
+      }
+
+      const alertData = AlertController.buildDeviceEventAlert(payload);
+      const result = await Alert.create(alertData);
+
+      res.status(201).json({
+        success: true,
+        message: 'Device event stored as alert successfully',
+        data: {
+          id: result.insertId,
+          ...alertData,
         }
       });
     } catch (error) {
