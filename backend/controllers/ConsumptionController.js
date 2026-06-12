@@ -158,30 +158,47 @@ class ConsumptionController {
     try {
       const {
         device_id,
+        id_class,
+        class_code,
+        classCode,
+        occupancy,
+        power_ac,
+        power_ac_kw,
+        power_lamp,
+        power_lamp_kw,
         consumption,
         consumption_date,
         hour_start,
         hour_end,
         temperature,
         humidity,
+        payload,
+        message_id,
         notes
       } = req.body;
 
-      if (!device_id || consumption === undefined || !consumption_date || !hour_start || !hour_end) {
+      if (device_id === undefined && id_class === undefined && class_code === undefined && classCode === undefined) {
         return res.status(400).json({
           success: false,
-          message: 'device_id, consumption, consumption_date, hour_start, and hour_end are required'
+          message: 'device_id or id_class is required'
         });
       }
 
       const result = await Consumption.create({
         device_id,
+        id_class,
+        class_code: class_code ?? classCode,
+        occupancy,
+        power_ac: power_ac ?? power_ac_kw,
+        power_lamp: power_lamp ?? power_lamp_kw,
         consumption,
         consumption_date,
         hour_start,
         hour_end,
         temperature,
         humidity,
+        payload,
+        message_id,
         notes
       });
 
@@ -191,6 +208,11 @@ class ConsumptionController {
         data: {
           id: result.insertId,
           device_id,
+          id_class,
+          class_code: class_code ?? classCode,
+          occupancy,
+          power_ac: power_ac ?? power_ac_kw,
+          power_lamp: power_lamp ?? power_lamp_kw,
           consumption,
           consumption_date,
           hour_start,
@@ -278,12 +300,21 @@ class ConsumptionController {
       const transformedData = {};
       data.forEach((item) => {
         if (!transformedData[item.hour_start]) {
-          transformedData[item.hour_start] = { time: item.hour_start };
+          transformedData[item.hour_start] = { time: item.hour_start, ac: 0, lamp: 0, sensorTemp: 0, sensorHumidity: 0 };
         }
+
+        if (item.ac_total !== undefined || item.lamp_total !== undefined) {
+          transformedData[item.hour_start].ac = parseFloat(item.ac_total) || 0;
+          transformedData[item.hour_start].lamp = parseFloat(item.lamp_total) || 0;
+          transformedData[item.hour_start].sensorTemp = parseFloat(item.avg_temperature) || 0;
+          transformedData[item.hour_start].sensorHumidity = parseFloat(item.avg_humidity) || 0;
+          return;
+        }
+
         if (item.device_type === 'AC') {
-          transformedData[item.hour_start].ac = parseFloat(item.total_consumption);
+          transformedData[item.hour_start].ac = parseFloat(item.total_consumption) || 0;
         } else if (item.device_type === 'LAMP') {
-          transformedData[item.hour_start].lamp = parseFloat(item.total_consumption);
+          transformedData[item.hour_start].lamp = parseFloat(item.total_consumption) || 0;
         }
       });
 

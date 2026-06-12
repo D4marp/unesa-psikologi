@@ -73,26 +73,6 @@ export default function Dashboard() {
           setClasses(uniqueClasses)
         }
         
-        // Load today's hourly consumption data (from first device as example)
-        const today = new Date().toISOString().split('T')[0]
-        if (devicesData && devicesData.length > 0) {
-          try {
-            const hourlyData = await consumptionAPI.getHourly(devicesData[0].id, today)
-            // Transform hourly data to chart format
-            if (hourlyData && hourlyData.length > 0) {
-              const chartData = hourlyData.map((item: any) => ({
-                time: item.hour_start?.substring(11, 16) || '00:00',
-                ac: parseFloat(item.consumption) || 0,
-                lamp: 0, // Will be populated from actual data
-              }))
-              setEnergyData(chartData.slice(0, 7)) // Show last 7 hourly slots
-            }
-          } catch (e) {
-            console.warn('Could not load hourly consumption data:', e)
-            setEnergyData(generateMockCharData())
-          }
-        }
-        
         setMonthlyData(buildMonthlyTypeSeries([], 6))
         
         setError(null)
@@ -135,31 +115,94 @@ export default function Dashboard() {
     loadMonthlyTrend()
   }, [devices, selectedClass])
 
+  useEffect(() => {
+    const loadHourlyTrend = async () => {
+      try {
+        if (!devices || devices.length === 0) {
+          setEnergyData(generateMockCharData())
+          return
+        }
+
+        const today = new Date().toISOString().split('T')[0]
+
+        if (selectedClass === 'All') {
+          const classIds = [...new Set(devices.map((item) => item.class_id))]
+          const perClassHourly = await Promise.all(
+            classIds.map((id) => consumptionAPI.getHourlyAggregatedByClass(id, today).catch(() => []))
+          )
+          setEnergyData(mergeHourlySeries(perClassHourly as any[][]))
+          return
+        }
+
+        const classId = devices.find((item) => item.location === selectedClass)?.class_id
+        if (!classId) {
+          setEnergyData(generateMockCharData())
+          return
+        }
+
+        const hourly = await consumptionAPI.getHourlyAggregatedByClass(classId, today)
+        setEnergyData((hourly || []).map((item: any) => ({
+          time: item.time || item.hour_start || '00:00',
+          ac: Number(item.ac ?? item.ac_total ?? 0),
+          lamp: Number(item.lamp ?? item.lamp_total ?? 0),
+          sensorTemp: Number(item.sensorTemp ?? item.avg_temperature ?? 0),
+          sensorHumidity: Number(item.sensorHumidity ?? item.avg_humidity ?? 0),
+        })))
+      } catch (e) {
+        console.warn('Could not load hourly consumption summary:', e)
+        setEnergyData(generateMockCharData())
+      }
+    }
+
+    loadHourlyTrend()
+  }, [devices, selectedClass])
+
   // Filter devices by selected class
   const filteredDevices = selectedClass === 'All' 
     ? devices 
     : devices.filter(d => d.location === selectedClass)
 
   // Calculate KPI values
-  const totalPower = filteredDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0).toFixed(2)
+  const deviceTotalPower = filteredDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0)
   const acDevices = filteredDevices.filter(d => d.device_type === 'AC')
   const lampDevices = filteredDevices.filter(d => d.device_type === 'LAMP')
   const sensorDevices = filteredDevices.filter(d => d.device_type === 'SENSOR')
   
-  const acPower = acDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0).toFixed(2)
-  const lampPower = lampDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0).toFixed(2)
+  const deviceAcPower = acDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0)
+  const deviceLampPower = lampDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0)
 
-  // Calculate average efficiency
-  const avgAcTemp = acDevices.length > 0 
-    ? (acDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_temperature)) || 0), 0) / acDevices.length).toFixed(1)
-    : '0'
+  // Use only valid AC temperature readings; fallback to default 24°C when real data is unavailable.
+  const validAcTemps = acDevices
+    .map((d) => parseFloat(String(d.current_temperature)))
+    .filter((temp) => Number.isFinite(temp) && temp > 0)
 
-  const avgSensorTemp = sensorDevices.length > 0
-    ? (sensorDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_temperature)) || 0), 0) / sensorDevices.length).toFixed(1)
-    : '0'
+  const avgAcTemp = validAcTemps.length > 0
+    ? (validAcTemps.reduce((sum, temp) => sum + temp, 0) / validAcTemps.length).toFixed(1)
+    : '24.0'
 
+  const latestHourlyPoint = energyData.length > 0 ? energyData[energyData.length - 1] : null
   const latestMonthlyPoint = monthlyData.length > 0 ? monthlyData[monthlyData.length - 1] : null
-  const latestSensorHumidity = latestMonthlyPoint?.sensorHumidity || 0
+  const latestSensorPoint = latestHourlyPoint || latestMonthlyPoint
+
+  const currentAcPower = latestHourlyPoint && latestHourlyPoint.ac > 0
+    ? latestHourlyPoint.ac
+    : deviceAcPower
+
+  const currentLampPower = latestHourlyPoint && latestHourlyPoint.lamp > 0
+    ? latestHourlyPoint.lamp
+    : deviceLampPower
+
+  const totalPower = (latestHourlyPoint && (latestHourlyPoint.ac > 0 || latestHourlyPoint.lamp > 0)
+    ? currentAcPower + currentLampPower
+    : deviceTotalPower).toFixed(2)
+
+  const avgSensorTemp = latestSensorPoint?.sensorTemp && latestSensorPoint.sensorTemp > 0
+    ? latestSensorPoint.sensorTemp.toFixed(1)
+    : '0'
+
+  const latestSensorHumidity = latestSensorPoint?.sensorHumidity && latestSensorPoint.sensorHumidity > 0
+    ? latestSensorPoint.sensorHumidity
+    : 0
 
   if (loading) {
     return (
@@ -301,14 +344,14 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <KPICard
               title="AC - Daya Saat Ini"
-              value={`${acPower} kW`}
+              value={`${currentAcPower.toFixed(2)} kW`}
               change="+5%"
               icon={<Zap className="text-orange-500" size={20} />}
               bgColor="bg-orange-50"
             />
             <KPICard
               title="Lampu - Daya Saat Ini"
-              value={`${lampPower} kW`}
+              value={`${currentLampPower.toFixed(2)} kW`}
               change="+3%"
               icon={<Zap className="text-blue-500" size={20} />}
               bgColor="bg-blue-50"
@@ -547,6 +590,59 @@ function generateMockMonthlyData(): ChartDataPoint[] {
   }
   
   return data
+}
+
+function mergeHourlySeries(seriesList: any[][]): ChartDataPoint[] {
+  const hourMap = new Map<string, {
+    time: string
+    ac: number
+    lamp: number
+    sensorTemps: number[]
+    sensorHumiditys: number[]
+  }>()
+
+  ;(seriesList || []).forEach((series) => {
+    (series || []).forEach((item: any) => {
+      const time = item.time || item.hour_start || '00:00'
+      const existing = hourMap.get(time) || {
+        time,
+        ac: 0,
+        lamp: 0,
+        sensorTemps: [],
+        sensorHumiditys: [],
+      }
+
+      existing.ac += Number(item.ac ?? item.ac_total ?? item.total_consumption ?? 0) || 0
+      existing.lamp += Number(item.lamp ?? item.lamp_total ?? 0) || 0
+
+      const sensorTemp = Number(item.sensorTemp ?? item.avg_temperature)
+      const sensorHumidity = Number(item.sensorHumidity ?? item.avg_humidity)
+
+      if (Number.isFinite(sensorTemp) && sensorTemp > 0) {
+        existing.sensorTemps.push(sensorTemp)
+      }
+
+      if (Number.isFinite(sensorHumidity) && sensorHumidity > 0) {
+        existing.sensorHumiditys.push(sensorHumidity)
+      }
+
+      hourMap.set(time, existing)
+    })
+  })
+
+  return [...hourMap.values()]
+    .sort((left, right) => left.time.localeCompare(right.time))
+    .map((entry) => ({
+      time: entry.time,
+      ac: Math.round(entry.ac * 100) / 100,
+      lamp: Math.round(entry.lamp * 100) / 100,
+      sensorTemp: entry.sensorTemps.length > 0
+        ? entry.sensorTemps.reduce((sum, value) => sum + value, 0) / entry.sensorTemps.length
+        : 0,
+      sensorHumidity: entry.sensorHumiditys.length > 0
+        ? entry.sensorHumiditys.reduce((sum, value) => sum + value, 0) / entry.sensorHumiditys.length
+        : 0,
+    }))
 }
 
 function buildMonthlyTypeSeries(apiRows: any[], months: number = 6): ChartDataPoint[] {

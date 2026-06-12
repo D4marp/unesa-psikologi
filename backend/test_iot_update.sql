@@ -1,56 +1,37 @@
--- Simulate IoT Gateway updating device readings
-UPDATE devices 
-SET 
-    current_power = 2.8,
-    current_temperature = 22.5,
-    last_heartbeat = NOW(),
-    iot_status = 'active'
-WHERE device_eui = 'AC-KELAS-A-001';
-
--- Update multiple devices
-UPDATE devices 
-SET 
-    current_power = 0.45,
-    last_heartbeat = NOW(),
-    iot_status = 'active'
-WHERE device_eui = 'LAMP-KELAS-A-001';
-
--- Insert consumption data for AC
+-- Simulate IoT Gateway class-level consumption insert
+-- id_class uses the last two digits of the class name, e.g. Q1.01.02 -> 02
+-- occupancy can be 0, 1, or NULL when the sensor does not provide it
+-- power_ac and power_lamp are already in kW, temperature/humidity come from the sensor
 INSERT INTO device_consumption (
-    device_id, 
-    consumption, 
-    consumption_date, 
-    hour_start, 
-    hour_end, 
-    temperature, 
+    id_class,
+    occupancy,
+    power_ac,
+    power_lamp,
+    temperature,
     humidity
 )
-SELECT 
+VALUES (
+    '02',
     1,
-    2.8,
-    '2026-02-24',
-    '07:00:00',
-    '08:00:00',
-    22.5,
-    65
-FROM dual
-ON DUPLICATE KEY UPDATE 
-    consumption = 2.8;
+    2.8000,
+    0.4500,
+    22.5000,
+    65.0000
+);
 
--- Insert consumption data for Lamp
 INSERT INTO device_consumption (
-    device_id, 
-    consumption, 
-    consumption_date, 
-    hour_start, 
-    hour_end
+    id_class,
+    occupancy,
+    power_ac,
+    power_lamp,
+    temperature,
+    humidity
 )
-SELECT 
-    2,
-    0.45,
-    '2026-02-24',
-    '07:00:00',
-    '08:00:00'
-FROM dual
-ON DUPLICATE KEY UPDATE 
-    consumption = 0.45;
+VALUES (
+    '03',
+    NULL,
+    3.1200,
+    0.3800,
+    24.2500,
+    61.7500
+);

@@ -2,10 +2,11 @@ const Device = require('../models/Device');
 const Consumption = require('../models/Consumption');
 
 class DeviceController {
-  static getNodeRedControlUrl() {
-    const baseUrl = (process.env.NODERED_CONTROL_BASE_URL || 'http://10.12.1.97:1880').replace(/\/$/, '');
-    const endpointPath = process.env.NODERED_CONTROL_PATH || '/api/device-control';
-    return `${baseUrl}${endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`}`;
+  // Maps classCode e.g. "Q1.01.02" → "http://10.12.1.150:1880/api/q10102"
+  static getNodeRedClassEndpointUrl(classCode) {
+    const baseUrl = (process.env.NODERED_BASE_URL || 'http://10.12.1.150:1880').replace(/\/$/, '');
+    const endpoint = String(classCode).toLowerCase().replace(/\./g, '');
+    return `${baseUrl}/api/${endpoint}`;
   }
 
   static async getAll(req, res) {
@@ -281,15 +282,19 @@ class DeviceController {
       }
 
       const normalizedAction = String(action).toLowerCase();
-      const nodeRedUrl = DeviceController.getNodeRedControlUrl();
+      const classCode = device.location || device.class_name || null;
+      const nodeRedUrl = classCode
+        ? DeviceController.getNodeRedClassEndpointUrl(classCode)
+        : null;
 
-      const payload = {
-        deviceId: Number(id),
-        deviceEui: device.device_eui || null,
-        deviceType: device.device_type || null,
-        classCode: device.location || device.class_name || null,
-        action: normalizedAction,
-      };
+      if (!nodeRedUrl) {
+        return res.status(400).json({
+          success: false,
+          message: 'Device has no class code — cannot determine Node-RED endpoint',
+        });
+      }
+
+      const payload = { state: normalizedAction };
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
@@ -375,14 +380,9 @@ class DeviceController {
       }
 
       const normalizedAction = String(action).toLowerCase();
-      const nodeRedUrl = DeviceController.getNodeRedControlUrl();
+      const nodeRedUrl = DeviceController.getNodeRedClassEndpointUrl(classCode);
 
-      const payload = {
-        classCode,
-        action: normalizedAction,
-        scope: 'class',
-        deviceIds: devices.map((d) => d.id),
-      };
+      const payload = { state: normalizedAction };
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);

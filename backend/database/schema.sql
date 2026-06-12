@@ -58,24 +58,59 @@ CREATE TABLE IF NOT EXISTS devices (
 -- Device Consumption Data (Hourly) - stores data from IoT uplink messages
 CREATE TABLE IF NOT EXISTS device_consumption (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    device_id INT NOT NULL,
-    consumption DECIMAL(10, 4) NOT NULL COMMENT 'Power consumption in kW - received from IoT',
+    device_id INT NULL,
+    id_class CHAR(2) NULL COMMENT 'Last two digits of class name, e.g. Q1.01.02 -> 02',
+    occupancy TINYINT(1) NULL COMMENT '0/1 occupancy flag, nullable when unavailable',
+    power_ac DECIMAL(10, 4) DEFAULT NULL COMMENT 'AC power in kW',
+    power_lamp DECIMAL(10, 4) DEFAULT NULL COMMENT 'Lamp power in kW',
+    consumption DECIMAL(10, 4) DEFAULT NULL COMMENT 'Total power consumption in kW',
     consumption_date DATE NOT NULL,
     hour_start TIME NOT NULL,
     hour_end TIME NOT NULL,
-    temperature DECIMAL(5, 2) DEFAULT NULL COMMENT 'Temperature from IoT sensor',
-    humidity DECIMAL(5, 2) DEFAULT NULL COMMENT 'Humidity from IoT sensor',
+    temperature DECIMAL(10, 4) DEFAULT NULL COMMENT 'Temperature from IoT sensor',
+    humidity DECIMAL(10, 4) DEFAULT NULL COMMENT 'Humidity from IoT sensor',
     payload JSON COMMENT 'Raw IoT payload data',
     message_id VARCHAR(100) COMMENT 'IoT message unique identifier',
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_consumption (device_id, consumption_date, hour_start),
+    UNIQUE KEY unique_consumption_device (device_id, consumption_date, hour_start),
+    UNIQUE KEY unique_consumption_class (id_class, consumption_date, hour_start),
     INDEX idx_device (device_id),
+    INDEX idx_class (id_class),
     INDEX idx_date (consumption_date),
     INDEX idx_datetime (consumption_date, hour_start),
     INDEX idx_message (message_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DELIMITER $$
+
+CREATE TRIGGER trg_device_consumption_before_insert
+BEFORE INSERT ON device_consumption
+FOR EACH ROW
+BEGIN
+    IF NEW.id_class IS NOT NULL THEN
+        SET NEW.id_class = RIGHT(TRIM(NEW.id_class), 2);
+    END IF;
+
+    IF NEW.consumption IS NULL THEN
+        SET NEW.consumption = COALESCE(NEW.power_ac, 0) + COALESCE(NEW.power_lamp, 0);
+    END IF;
+
+    IF NEW.consumption_date IS NULL THEN
+        SET NEW.consumption_date = CURDATE();
+    END IF;
+
+    IF NEW.hour_start IS NULL THEN
+        SET NEW.hour_start = TIME(NOW());
+    END IF;
+
+    IF NEW.hour_end IS NULL THEN
+        SET NEW.hour_end = ADDTIME(NEW.hour_start, '01:00:00');
+    END IF;
+END$$
+
+DELIMITER ;
 
 -- Alerts table
 CREATE TABLE IF NOT EXISTS alerts (
