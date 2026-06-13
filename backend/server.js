@@ -2,7 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
-require('dotenv').config();
+const path = require('path');
+
+// Load backend environment variables from backend/.env when running from repository root
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 // Import database connection
 const db = require('./config/database');
@@ -18,13 +21,25 @@ const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 
-const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000,http://127.0.0.1:3000')
-  .split(',')
-  .map(origin => origin.trim())
-  .filter(Boolean);
+let allowedOrigins = [];
+if (process.env.FRONTEND_URL) {
+  allowedOrigins = process.env.FRONTEND_URL.split(',').map(origin => origin.trim());
+}
+if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+  allowedOrigins.push(
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://localhost:3003',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:3002',
+    'http://127.0.0.1:3003'
+  );
+}
+allowedOrigins = [...new Set(allowedOrigins.filter(Boolean))];
 
-// Middleware
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
     // Allow non-browser tools (no Origin header) and configured frontends.
     if (!origin || allowedOrigins.includes(origin)) {
@@ -32,8 +47,13 @@ app.use(cors({
     }
     return callback(new Error(`CORS blocked for origin: ${origin}`));
   },
-  credentials: true
-}));
+  credentials: true,
+  optionsSuccessStatus: 204
+};
+
+// Middleware
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(cookieParser());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));

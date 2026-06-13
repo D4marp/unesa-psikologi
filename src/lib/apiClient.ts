@@ -390,10 +390,10 @@ export const usersAPI = {
   },
 
   delete: async (id: number) => {
-    const response = await apiCall<{ success: boolean; message: string }>(`/users/${id}`, {
+    const response = await apiCall<{ success: boolean; message: string; data?: any }>(`/users/${id}`, {
       method: 'DELETE',
     });
-    return response.data;
+    return response;
   },
 };
 

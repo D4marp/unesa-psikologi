@@ -1,5 +1,87 @@
 const Device = require('../models/Device');
 const Consumption = require('../models/Consumption');
+const net = require('net');
+
+// Mapping kelas ke port TCP In Node-RED LoRa Gateway
+const CLASS_PORTS = {
+  q10102: { className: "Q1.01.02", tcpPort: 5102 },
+  q10103: { className: "Q1.01.03", tcpPort: 5103 },
+  q10104: { className: "Q1.01.04", tcpPort: 5104 },
+  q10109: { className: "Q1.01.09", tcpPort: 5109 },
+  q10111: { className: "Q1.01.11", tcpPort: 5111 }
+};
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function sendTcpOnce(host, port, payload) {
+  const tcpTimeout = Number(process.env.TCP_TIMEOUT_MS || 3000);
+  return new Promise((resolve, reject) => {
+    const client = new net.Socket();
+    let finished = false;
+
+    function cleanup() {
+      client.removeAllListeners("timeout");
+      client.removeAllListeners("error");
+      client.removeAllListeners("close");
+    }
+
+    function finishOk() {
+      if (!finished) {
+        finished = true;
+        cleanup();
+        resolve();
+      }
+    }
+
+    function finishError(err) {
+      if (!finished) {
+        finished = true;
+        cleanup();
+        try { client.destroy(); } catch (_) {}
+        reject(err);
+      }
+    }
+
+    client.setTimeout(tcpTimeout);
+
+    client.connect(port, host, () => {
+      // Node-RED TCP In memakai delimiter newline (\n)
+      client.write(JSON.stringify(payload) + "\n", "utf8", (err) => {
+        if (err) return finishError(err);
+        client.end();
+        finishOk();
+      });
+    });
+
+    client.on("timeout", () => {
+      finishError(new Error(`TCP timeout ke ${host}:${port}`));
+    });
+
+    client.on("error", (err) => {
+      finishError(err);
+    });
+  });
+}
+
+async function sendTcpCommand(host, port, payload) {
+  let lastError;
+  const attempts = Math.max(1, Number(process.env.TCP_RETRY_ATTEMPTS || 1));
+  const delay = Number(process.env.TCP_RETRY_DELAY_MS || 500);
+
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await sendTcpOnce(host, port, payload);
+      return { attempt: i };
+    } catch (err) {
+      lastError = err;
+      if (i < attempts) await sleep(delay);
+    }
+  }
+
+  throw lastError;
+}
 
 class DeviceController {
   // Maps classCode e.g. "Q1.01.02" → "http://10.12.1.150:1880/api/q10102"
@@ -264,9 +346,10 @@ class DeviceController {
   static async controlViaNodeRed(req, res) {
     try {
       const { id } = req.params;
-      const { action } = req.body;
+      const { action, state } = req.body;
+      const finalAction = action || state;
 
-      if (!action || !['on', 'off'].includes(String(action).toLowerCase())) {
+      if (!finalAction || !['on', 'off'].includes(String(finalAction).toLowerCase())) {
         return res.status(400).json({
           success: false,
           message: 'Invalid action. Must be on or off'
@@ -281,8 +364,46 @@ class DeviceController {
         });
       }
 
-      const normalizedAction = String(action).toLowerCase();
+      const normalizedAction = String(finalAction).toLowerCase();
       const classCode = device.location || device.class_name || null;
+      const classKey = classCode ? String(classCode).toLowerCase().replace(/\./g, '') : '';
+
+      // Check if classroom is mapped in CLASS_PORTS for direct TCP control
+      if (classKey && CLASS_PORTS[classKey]) {
+        const cfg = CLASS_PORTS[classKey];
+        const gatewayHost = process.env.GATEWAY_HOST || '10.12.1.150';
+        const tcpPayload = { state: normalizedAction };
+
+        try {
+          const tcpResult = await sendTcpCommand(gatewayHost, cfg.tcpPort, tcpPayload);
+          const nextStatus = normalizedAction === 'on' ? 'active' : 'idle';
+          await Device.updateStatus(id, nextStatus);
+
+          return res.json({
+            success: true,
+            message: `Device ${normalizedAction.toUpperCase()} command sent successfully via TCP to ${cfg.className}`,
+            data: {
+              id: Number(id),
+              action: normalizedAction,
+              status: nextStatus,
+              tcp: {
+                className: cfg.className,
+                gatewayHost,
+                tcpPort: cfg.tcpPort,
+                tcpAttempt: tcpResult.attempt
+              }
+            }
+          });
+        } catch (err) {
+          return res.status(500).json({
+            success: false,
+            message: `Gagal mengirim command TCP ke ${cfg.className}`,
+            error: err.message
+          });
+        }
+      }
+
+      // Fallback to original HTTP Node-RED endpoint
       const nodeRedUrl = classCode
         ? DeviceController.getNodeRedClassEndpointUrl(classCode)
         : null;
@@ -355,7 +476,8 @@ class DeviceController {
   static async controlClassViaNodeRed(req, res) {
     try {
       const { classCode } = req.params;
-      const { action } = req.body;
+      const { action, state } = req.body;
+      const finalAction = action || state;
 
       if (!classCode) {
         return res.status(400).json({
@@ -364,7 +486,7 @@ class DeviceController {
         });
       }
 
-      if (!action || !['on', 'off'].includes(String(action).toLowerCase())) {
+      if (!finalAction || !['on', 'off'].includes(String(finalAction).toLowerCase())) {
         return res.status(400).json({
           success: false,
           message: 'Invalid action. Must be on or off'
@@ -379,7 +501,46 @@ class DeviceController {
         });
       }
 
-      const normalizedAction = String(action).toLowerCase();
+      const normalizedAction = String(finalAction).toLowerCase();
+      const classKey = String(classCode).toLowerCase().replace(/\./g, '');
+
+      // Check if classroom is mapped in CLASS_PORTS for direct TCP control
+      if (CLASS_PORTS[classKey]) {
+        const cfg = CLASS_PORTS[classKey];
+        const gatewayHost = process.env.GATEWAY_HOST || '10.12.1.150';
+        const tcpPayload = { state: normalizedAction };
+
+        try {
+          const tcpResult = await sendTcpCommand(gatewayHost, cfg.tcpPort, tcpPayload);
+          const nextStatus = normalizedAction === 'on' ? 'active' : 'idle';
+          await Promise.all(devices.map((device) => Device.updateStatus(device.id, nextStatus)));
+
+          return res.json({
+            success: true,
+            message: `Class ${classCode} ${normalizedAction.toUpperCase()} command sent successfully via TCP`,
+            data: {
+              classCode,
+              action: normalizedAction,
+              status: nextStatus,
+              affectedDevices: devices.length,
+              tcp: {
+                className: cfg.className,
+                gatewayHost,
+                tcpPort: cfg.tcpPort,
+                tcpAttempt: tcpResult.attempt
+              }
+            }
+          });
+        } catch (err) {
+          return res.status(500).json({
+            success: false,
+            message: `Gagal mengirim command TCP ke ${cfg.className}`,
+            error: err.message
+          });
+        }
+      }
+
+      // Fallback to original HTTP Node-RED endpoint
       const nodeRedUrl = DeviceController.getNodeRedClassEndpointUrl(classCode);
 
       const payload = { state: normalizedAction };

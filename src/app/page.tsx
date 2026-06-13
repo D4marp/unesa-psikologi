@@ -1,26 +1,26 @@
 'use client'
 
-import { 
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
-  ResponsiveContainer
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts'
-import { 
-  Zap, AlertCircle, Settings, LogOut, Menu, 
-  Gauge, Activity
+import {
+  Zap, Activity, Building2, Menu, Settings, LogOut, TrendingDown, Power, Clock, ShieldCheck, Cpu
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { devicesAPI, consumptionAPI } from '@/lib/apiClient'
+import { devicesAPI } from '@/lib/apiClient'
 import { useAuth } from '@/components/AuthProvider'
 
-interface Device {
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface LiveDevice {
   id: number
   class_id: number
   device_eui: string
   device_name: string
   device_type: string
-  application_type: string
   location: string
   current_power: number
   current_temperature: number
@@ -28,210 +28,275 @@ interface Device {
   status?: string
 }
 
-interface ChartDataPoint {
-  time?: string
-  month?: string
-  ac: number
-  lamp: number
-  sensorTemp?: number
-  sensorHumidity?: number
+interface FacultyCard {
+  id: string
+  name: string
+  shortName: string
+  mode: 'live' | 'soon'
+  totalPower: number
+  deviceCount: number
+  activeDevices: number
+  rooms: number
+  href: string
+  accentColor: string
+  icon: string
+  statusText: string
 }
 
-function isDeviceOnline(device: Device): boolean {
-  const iot = String(device.iot_status || '').toLowerCase()
-  const status = String(device.status || '').toLowerCase()
-  return iot === 'online' || iot === 'active' || status === 'active' || status === 'idle'
+interface ChartPoint {
+  label: string
+  psikologi: number
+  fbs: number
+  total: number
 }
 
-export default function Dashboard() {
+interface RoomRow {
+  faculty: string
+  room: string
+  device: string
+  type: string
+  power: number
+  status: 'online' | 'offline'
+  deviceId?: number
+  location?: string
+}
+
+// ─── Dummy FBS data ───────────────────────────────────────────────────────────
+
+const FBS_DEVICES: RoomRow[] = [
+  { faculty: 'FBS', room: 'BS-101', device: 'AC BS-101 Unit 1', type: 'AC', power: 2.4, status: 'online' },
+  { faculty: 'FBS', room: 'BS-101', device: 'Lampu BS-101', type: 'LAMP', power: 0.8, status: 'online' },
+  { faculty: 'FBS', room: 'BS-102', device: 'AC BS-102 Unit 1', type: 'AC', power: 2.1, status: 'online' },
+  { faculty: 'FBS', room: 'BS-102', device: 'Lampu BS-102', type: 'LAMP', power: 0.6, status: 'offline' },
+  { faculty: 'FBS', room: 'BS-103', device: 'AC BS-103 Unit 1', type: 'AC', power: 1.8, status: 'online' },
+  { faculty: 'FBS', room: 'BS-103', device: 'Lampu BS-103', type: 'LAMP', power: 0.7, status: 'online' },
+  { faculty: 'FBS', room: 'Lab Bahasa', device: 'AC Lab Bahasa', type: 'AC', power: 3.2, status: 'online' },
+  { faculty: 'FBS', room: 'Lab Bahasa', device: 'Lampu Lab Bahasa', type: 'LAMP', power: 1.2, status: 'online' },
+  { faculty: 'FBS', room: 'Ruang Seni', device: 'AC Ruang Seni', type: 'AC', power: 2.8, status: 'online' },
+  { faculty: 'FBS', room: 'Ruang Seni', device: 'Lampu Ruang Seni', type: 'LAMP', power: 2.1, status: 'online' },
+]
+
+const FBS_TOTAL_POWER = FBS_DEVICES.reduce((s, d) => s + (d.status === 'online' ? d.power : 0), 0)
+
+function generateMonthlyComparison(): ChartPoint[] {
+  const now = new Date()
+  const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des']
+  return Array.from({ length: 6 }, (_, i) => {
+    const mIdx = (now.getMonth() - 5 + i + 12) % 12
+    const base = 380 + Math.sin(i * 0.8) * 60
+    const psi = Math.round((base + Math.random() * 50) * 10) / 10
+    
+    // FBS starts in May (Mei). Months are indexed: Jan=0, Feb=1, Mar=2, Apr=3, Mei=4, Jun=5, etc.
+    const fbs = mIdx >= 4
+      ? Math.round((base * 0.9 + Math.random() * 40) * 10) / 10
+      : 0
+      
+    return { label: months[mIdx], psikologi: psi, fbs, total: Math.round((psi + fbs) * 10) / 10 }
+  })
+}
+
+function generateDailyComparison(): ChartPoint[] {
+  const hours = ['06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00']
+  return hours.map((h, i) => {
+    const peak = Math.sin((i - 1) * Math.PI / 6) * 20
+    const psi = Math.max(10, Math.round((30 + peak + Math.random() * 8) * 10) / 10)
+    const fbs = Math.max(8, Math.round((26 + peak * 0.9 + Math.random() * 7) * 10) / 10)
+    return { label: h, psikologi: psi, fbs, total: Math.round((psi + fbs) * 10) / 10 }
+  })
+}
+
+function isDeviceOnline(d: LiveDevice) {
+  const iot = String(d.iot_status || '').toLowerCase()
+  const st = String(d.status || '').toLowerCase()
+  return iot === 'online' || iot === 'active' || st === 'active' || st === 'idle'
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function RektoratDashboard() {
   const { user, logout } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [timeRange, setTimeRange] = useState('24h')
-  const [selectedClass, setSelectedClass] = useState('All')
-  const [devices, setDevices] = useState<Device[]>([])
+  const [liveDevices, setLiveDevices] = useState<LiveDevice[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [energyData, setEnergyData] = useState<ChartDataPoint[]>([])
-  const [monthlyData, setMonthlyData] = useState<ChartDataPoint[]>([])
+  const [now, setNow] = useState(new Date())
+  const [monthlyData] = useState<ChartPoint[]>(generateMonthlyComparison())
+  const [dailyData] = useState<ChartPoint[]>(generateDailyComparison())
+  const [fbsRows, setFbsRows] = useState<RoomRow[]>(FBS_DEVICES)
+  const [classControlLoading, setClassControlLoading] = useState<Record<string, boolean>>({})
+  const [chartMode, setChartMode] = useState<'daily' | 'monthly'>('daily')
+  const [controlError, setControlError] = useState<string | null>(null)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
 
-  // Extract unique classes from devices
-  const [classes, setClasses] = useState(['All'])
-
-  // Load devices and consumption data from backend
+  // Clock
   useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        setLoading(true)
-        
-        // Fetch all devices from backend
-        const devicesData = await devicesAPI.getAll()
-        setDevices(devicesData || [])
-        
-        // Extract unique locations (classes)
-        if (devicesData && devicesData.length > 0) {
-          const uniqueClasses = ['All', ...new Set(devicesData.map((d: Device) => d.location))]
-          setClasses(uniqueClasses)
-        }
-        
-        setMonthlyData(buildMonthlyTypeSeries([], 6))
-        
-        setError(null)
-      } catch (err) {
-        console.error('Error loading dashboard data:', err)
-        setError(err instanceof Error ? err.message : 'Failed to load data')
-        // Show mock data on error
-        setDevices([])
-        setClasses(['All'])
-        setEnergyData(generateMockCharData())
-        setMonthlyData(buildMonthlySeries([], 6))
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadDashboardData()
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
   }, [])
 
-  useEffect(() => {
-    const loadMonthlyTrend = async () => {
-      try {
-        if (!devices || devices.length === 0) {
-          setMonthlyData(buildMonthlyTypeSeries([], 6))
-          return
-        }
-
-        const classId = selectedClass === 'All'
-          ? undefined
-          : devices.find((d) => d.location === selectedClass)?.class_id
-
-        const summary = await consumptionAPI.getMonthlyTrendSummary(6, classId)
-        setMonthlyData(buildMonthlyTypeSeries(summary || [], 6))
-      } catch (e) {
-        console.warn('Could not load monthly trend summary:', e)
-        setMonthlyData(buildMonthlyTypeSeries([], 6))
-      }
+  // Load live Psikologi data
+  const loadLiveData = useCallback(async () => {
+    try {
+      setLoading(true)
+      const data = await devicesAPI.getAll()
+      setLiveDevices(data || [])
+    } catch {
+      setLiveDevices([])
+    } finally {
+      setLoading(false)
     }
+  }, [])
 
-    loadMonthlyTrend()
-  }, [devices, selectedClass])
+  useEffect(() => { loadLiveData() }, [loadLiveData])
 
-  useEffect(() => {
-    const loadHourlyTrend = async () => {
-      try {
-        if (!devices || devices.length === 0) {
-          setEnergyData(generateMockCharData())
-          return
-        }
+  // Computed Psikologi stats
+  const psiOnline = liveDevices.filter(isDeviceOnline)
+  const psiTotalPower = psiOnline.reduce((s, d) => s + (parseFloat(String(d.current_power)) || 0), 0)
+  const psiRooms = new Set(liveDevices.map(d => d.location).filter(Boolean)).size
 
-        const today = new Date().toISOString().split('T')[0]
+  // Faculty cards config
+  const faculties: FacultyCard[] = [
+    {
+      id: 'psikologi',
+      name: 'Fakultas Psikologi',
+      shortName: 'Psikologi',
+      mode: 'live',
+      totalPower: psiTotalPower,
+      deviceCount: liveDevices.length,
+      activeDevices: psiOnline.length,
+      rooms: psiRooms,
+      href: '/psikologi',
+      accentColor: '#3b82f6', // Institutional Blue
+      icon: '🧠',
+      statusText: 'TERKONEKSI'
+    },
+    {
+      id: 'fbs',
+      name: 'Fakultas Bahasa dan Seni',
+      shortName: 'FBS',
+      mode: 'live',
+      totalPower: FBS_TOTAL_POWER,
+      deviceCount: FBS_DEVICES.length,
+      activeDevices: fbsRows.filter(d => d.status === 'online').length,
+      rooms: new Set(FBS_DEVICES.map(d => d.room)).size,
+      href: '/fbs',
+      accentColor: '#0d9488', // Teal
+      icon: '🎨',
+      statusText: 'TERKONEKSI'
+    },
+    {
+      id: 'ft',
+      name: 'Fakultas Teknik',
+      shortName: 'FT',
+      mode: 'soon',
+      totalPower: 0, deviceCount: 0, activeDevices: 0, rooms: 0,
+      href: '#', accentColor: '#94a3b8', icon: '⚙️',
+      statusText: 'INTEGRASI TAHAP II'
+    },
+    {
+      id: 'fe',
+      name: 'Fakultas Ekonomi',
+      shortName: 'FE',
+      mode: 'soon',
+      totalPower: 0, deviceCount: 0, activeDevices: 0, rooms: 0,
+      href: '#', accentColor: '#94a3b8', icon: '📈',
+      statusText: 'INTEGRASI TAHAP II'
+    },
+  ]
 
-        if (selectedClass === 'All') {
-          const classIds = [...new Set(devices.map((item) => item.class_id))]
-          const perClassHourly = await Promise.all(
-            classIds.map((id) => consumptionAPI.getHourlyAggregatedByClass(id, today).catch(() => []))
-          )
-          setEnergyData(mergeHourlySeries(perClassHourly as any[][]))
-          return
-        }
+  const totalUniversityPower = psiTotalPower + FBS_TOTAL_POWER
+  const totalDevices = liveDevices.length + fbsRows.length
+  const totalActive = psiOnline.length + fbsRows.filter(d => d.status === 'online').length
 
-        const classId = devices.find((item) => item.location === selectedClass)?.class_id
-        if (!classId) {
-          setEnergyData(generateMockCharData())
-          return
-        }
+  // Live rows from Psikologi
+  const liveRows: RoomRow[] = liveDevices.map(d => ({
+    faculty: 'Psikologi',
+    room: d.location,
+    device: d.device_name,
+    type: d.device_type,
+    power: parseFloat(String(d.current_power)) || 0,
+    status: isDeviceOnline(d) ? 'online' : 'offline',
+    deviceId: d.id,
+    location: d.location,
+  }))
 
-        const hourly = await consumptionAPI.getHourlyAggregatedByClass(classId, today)
-        setEnergyData((hourly || []).map((item: any) => ({
-          time: item.time || item.hour_start || '00:00',
-          ac: Number(item.ac ?? item.ac_total ?? 0),
-          lamp: Number(item.lamp ?? item.lamp_total ?? 0),
-          sensorTemp: Number(item.sensorTemp ?? item.avg_temperature ?? 0),
-          sensorHumidity: Number(item.sensorHumidity ?? item.avg_humidity ?? 0),
-        })))
-      } catch (e) {
-        console.warn('Could not load hourly consumption summary:', e)
-        setEnergyData(generateMockCharData())
-      }
+  // Convert FBS rows to match RoomRow
+  const fbsRowsMapped: RoomRow[] = fbsRows.map(r => ({
+    faculty: 'FBS',
+    room: r.room,
+    device: r.device,
+    type: r.type,
+    power: r.status === 'online' ? r.power : 0,
+    status: r.status,
+    location: r.room
+  }))
+
+  const allRows = [...liveRows, ...fbsRowsMapped]
+
+  // Unique live class locations for batch control
+  const liveClassCodes = Array.from(new Set(liveRows.map(r => r.location).filter(Boolean))) as string[]
+
+  const handleLiveClassControl = async (classCode: string, action: 'on' | 'off') => {
+    try {
+      setClassControlLoading(prev => ({ ...prev, [classCode]: true }))
+      setControlError(null)
+      await devicesAPI.controlByClass(classCode, action)
+      setLiveDevices(prev => prev.map(d =>
+        d.location === classCode
+          ? { ...d, status: action === 'on' ? 'active' : 'idle', iot_status: action === 'on' ? 'active' : 'inactive' }
+          : d
+      ))
+    } catch {
+      setControlError(`Gagal mengirim perintah ke ruangan ${classCode}`)
+    } finally {
+      setClassControlLoading(prev => ({ ...prev, [classCode]: false }))
     }
-
-    loadHourlyTrend()
-  }, [devices, selectedClass])
-
-  // Filter devices by selected class
-  const filteredDevices = selectedClass === 'All' 
-    ? devices 
-    : devices.filter(d => d.location === selectedClass)
-
-  // Calculate KPI values
-  const deviceTotalPower = filteredDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0)
-  const acDevices = filteredDevices.filter(d => d.device_type === 'AC')
-  const lampDevices = filteredDevices.filter(d => d.device_type === 'LAMP')
-  const sensorDevices = filteredDevices.filter(d => d.device_type === 'SENSOR')
-  
-  const deviceAcPower = acDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0)
-  const deviceLampPower = lampDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0)
-
-  // Use only valid AC temperature readings; fallback to default 24°C when real data is unavailable.
-  const validAcTemps = acDevices
-    .map((d) => parseFloat(String(d.current_temperature)))
-    .filter((temp) => Number.isFinite(temp) && temp > 0)
-
-  const avgAcTemp = validAcTemps.length > 0
-    ? (validAcTemps.reduce((sum, temp) => sum + temp, 0) / validAcTemps.length).toFixed(1)
-    : '24.0'
-
-  const latestHourlyPoint = energyData.length > 0 ? energyData[energyData.length - 1] : null
-  const latestMonthlyPoint = monthlyData.length > 0 ? monthlyData[monthlyData.length - 1] : null
-  const latestSensorPoint = latestHourlyPoint || latestMonthlyPoint
-
-  const currentAcPower = latestHourlyPoint && latestHourlyPoint.ac > 0
-    ? latestHourlyPoint.ac
-    : deviceAcPower
-
-  const currentLampPower = latestHourlyPoint && latestHourlyPoint.lamp > 0
-    ? latestHourlyPoint.lamp
-    : deviceLampPower
-
-  const totalPower = (latestHourlyPoint && (latestHourlyPoint.ac > 0 || latestHourlyPoint.lamp > 0)
-    ? currentAcPower + currentLampPower
-    : deviceTotalPower).toFixed(2)
-
-  const avgSensorTemp = latestSensorPoint?.sensorTemp && latestSensorPoint.sensorTemp > 0
-    ? latestSensorPoint.sensorTemp.toFixed(1)
-    : '0'
-
-  const latestSensorHumidity = latestSensorPoint?.sensorHumidity && latestSensorPoint.sensorHumidity > 0
-    ? latestSensorPoint.sensorHumidity
-    : 0
-
-  if (loading) {
-    return (
-      <div className="flex h-screen bg-gray-50 items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Memuat data...</p>
-        </div>
-      </div>
-    )
   }
 
+  const handleDummyDeviceToggle = (deviceId: number, action: 'on' | 'off') => {
+    setLiveDevices(prev => prev.map(d =>
+      d.id === deviceId
+        ? { ...d, status: action === 'on' ? 'active' : 'offline', iot_status: action === 'on' ? 'active' : 'offline' }
+        : d
+    ))
+  }
+
+  const handleFbsDeviceToggle = (deviceName: string) => {
+    setFbsRows(prev => prev.map(r =>
+      r.device === deviceName
+        ? { ...r, status: r.status === 'online' ? 'offline' : 'online' }
+        : r
+    ))
+  }
+
+  const pieData = [
+    { name: 'Psikologi', value: parseFloat(psiTotalPower.toFixed(2)), fill: '#1e3a8a' }, // Navy
+    { name: 'FBS', value: parseFloat(FBS_TOTAL_POWER.toFixed(2)), fill: '#0d9488' }, // Teal
+  ]
+
+  const chartData = chartMode === 'daily' ? dailyData : monthlyData
+  const chartKey = 'label'
+
   return (
-    <div className="flex h-screen bg-gray-50" style={{
-      backgroundImage: 'url(/assets/bg_image.png)',
+    <div className="flex h-screen overflow-hidden text-slate-800" style={{
+      fontFamily: "'Plus Jakarta Sans', sans-serif",
+      backgroundImage: "linear-gradient(to bottom, rgba(248, 250, 252, 0.95), rgba(248, 250, 252, 0.97)), url('/bg_unesa2.png')",
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundAttachment: 'fixed'
     }}>
-      {/* Semi-transparent overlay */}
-      <div className="absolute inset-0 bg-white/40 pointer-events-none"></div>
       
+      {/* Google Fonts Link */}
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
       {/* Sidebar */}
       <aside
         className={`${
           sidebarOpen ? 'w-64' : 'w-20'
-        } gradient-primary text-white transition-all duration-300 flex flex-col shadow-xl relative z-20`}
+        } bg-[#0f2d59] text-white transition-all duration-300 flex flex-col shadow-xl relative z-20 border-r-4 border-r-[#d8ae47]`}
       >
-        <div className="p-4 flex items-center justify-between">
+        <div className="p-4 flex items-center justify-between border-b border-white/10">
           {sidebarOpen && (
             <div className="flex-1 w-full h-auto">
               <Image 
@@ -240,448 +305,559 @@ export default function Dashboard() {
                 width={240} 
                 height={80}
                 priority
-                className="w-full h-auto object-contain"
+                className="w-full h-auto object-contain brightness-110"
               />
             </div>
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 hover:bg-white/20 rounded-lg"
+            className="p-2 hover:bg-white/10 rounded transition-all ml-auto"
           >
             <Menu size={20} />
           </button>
         </div>
 
-        <nav className="flex-1 px-3 space-y-2">
-          <NavItem icon={<Activity size={20} />} label="Dasbor" active sidebarOpen={sidebarOpen} href="/" />
-          <NavItem icon={<Zap size={20} />} label="Perangkat" sidebarOpen={sidebarOpen} href="/devices" />
-          <NavItem icon={<Gauge size={20} />} label="Analitik" sidebarOpen={sidebarOpen} href="/analytics" />
-          <NavItem icon={<AlertCircle size={20} />} label="Pemberitahuan" sidebarOpen={sidebarOpen} href="/alerts" />
-          {user?.role === 'admin' && <NavItem icon={<Settings size={20} />} label="Pengguna" sidebarOpen={sidebarOpen} href="/users" />}
+        <nav className="flex-1 px-3 py-4 space-y-2">
+          <Link href="/" className="flex items-center space-x-3 px-4 py-3 rounded text-white bg-white/10 font-bold transition-all">
+            <Building2 size={20} className="text-[#f1c40f]" />
+            {sidebarOpen && <span className="text-sm">Dasbor Rektorat</span>}
+          </Link>
+          <Link href="/psikologi" className="flex items-center space-x-3 px-4 py-3 rounded text-white/70 hover:bg-white/5 hover:text-white transition-all">
+            <Activity size={20} />
+            {sidebarOpen && <span className="text-sm">Fakultas Psikologi</span>}
+          </Link>
+          <Link href="/fbs" className="flex items-center space-x-3 px-4 py-3 rounded text-white/70 hover:bg-white/5 hover:text-white transition-all">
+            <Activity size={20} />
+            {sidebarOpen && <span className="text-sm">Fakultas Bahasa & Seni</span>}
+          </Link>
         </nav>
 
-        <div className="px-3 pb-6 space-y-2 border-t border-white/20 pt-4">
-          <NavItem icon={<Settings size={20} />} label="Pengaturan" sidebarOpen={sidebarOpen} href="/settings" />
-          <button onClick={logout} className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-white/70 hover:bg-white/10">
+        <div className="px-3 pb-6 space-y-2 border-t border-white/10 pt-4">
+          <Link href="/settings" className="flex items-center space-x-3 px-4 py-3 rounded text-white/70 hover:bg-white/5 hover:text-white transition-all">
+            <Settings size={20} />
+            {sidebarOpen && <span className="text-sm">Pengaturan</span>}
+          </Link>
+          <button onClick={logout} className="w-full flex items-center space-x-3 px-4 py-3 rounded text-white/70 hover:bg-white/5 hover:text-white transition-all text-left">
             <LogOut size={20} />
-            {sidebarOpen && <span className="text-sm font-medium">Keluar</span>}
+            {sidebarOpen && <span className="text-sm">Keluar</span>}
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto relative z-10">
-        {error && (
-          <div className="mx-8 mt-6 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-yellow-800">
-            Data API belum tersedia. Dashboard tetap dibuka dengan data kosong/mock sementara.
-          </div>
-        )}
-        {/* Header dengan Filter */}
-        <header className="bg-white shadow-sm border-b border-gray-200">
-          <div className="px-8 py-6">
-            <div className="flex justify-between items-center mb-4">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        
+        {/* Header */}
+        <header className="bg-[#0f2d59] text-white shadow-md border-b-4 border-[#d8ae47] z-10 shrink-0">
+          <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              {/* Sidebar toggle for mobile or simple branding when sidebar collapsed */}
+              {!sidebarOpen && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="p-1.5 hover:bg-white/10 rounded transition-all mr-2 lg:hidden"
+                >
+                  <Menu size={20} />
+                </button>
+              )}
               <div>
-                <h2 className="text-3xl font-bold text-gray-900">UNESA Fakultas Psikologi.</h2>
-                <p className="text-gray-500 mt-1">Pemantauan Konsumsi Energi Real-time per Kelas</p>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="text-sm text-gray-500">Total Daya Saat Ini</p>
-                  <p className="text-2xl font-bold text-primary">
-                    {totalPower} kW
-                  </p>
-                  <p className="text-xs text-green-600">↓ 8% vs kemarin</p>
-                </div>
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold">
-                  U
-                </div>
+                <h1 className="text-white font-extrabold text-base tracking-tight leading-tight uppercase">Dashboard Energi Rektorat</h1>
+                <p className="text-[#f1c40f] font-bold text-xs tracking-wider uppercase">Universitas Negeri Surabaya</p>
               </div>
             </div>
 
-            {/* Class Filter & Time Range */}
-            <div className="flex items-center space-x-6 pt-4 border-t border-gray-200">
-              <div className="flex items-center space-x-2">
-                <span className="text-sm font-semibold text-gray-700">Pilih Kelas:</span>
-                <div className="flex space-x-2 flex-wrap">
-                  {classes.map((cls) => (
-                    <button
-                      key={cls}
-                      onClick={() => setSelectedClass(cls)}
-                      className={`px-3 py-2 rounded-lg font-medium smooth-transition text-sm ${
-                        selectedClass === cls
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {cls}
-                    </button>
-                  ))}
+            <div className="flex items-center space-x-6">
+              {/* Clock and Calendar */}
+              <div className="text-right border-r border-white/20 pr-6 hidden md:block">
+                <div className="flex items-center justify-end space-x-1.5 text-white">
+                  <Clock size={13} className="text-[#f1c40f]" />
+                  <span className="font-bold text-sm tracking-wide">{now.toLocaleTimeString('id-ID')}</span>
                 </div>
+                <p className="text-slate-300 text-xs mt-0.5">{now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
               </div>
 
-              <div className="flex space-x-2 ml-auto">
-                {['24h', '7d', '30d'].map((range) => (
-                  <button
-                    key={range}
-                    onClick={() => setTimeRange(range)}
-                    className={`px-4 py-2 rounded-lg font-medium smooth-transition text-sm ${
-                      timeRange === range
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {range}
-                  </button>
-                ))}
+              {/* User Profile Badge with Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                  className="flex items-center space-x-2.5 hover:bg-white/10 p-1.5 rounded-lg transition-all focus:outline-none"
+                >
+                  <div className="w-9 h-9 rounded-full bg-[#d8ae47] text-[#0f2d59] font-black text-sm flex items-center justify-center border-2 border-white shadow-md">
+                    {user?.full_name ? user.full_name[0].toUpperCase() : 'A'}
+                  </div>
+                  <div className="hidden sm:block text-left">
+                    <p className="text-xs font-bold text-white leading-none">{user?.full_name || 'Administrator'}</p>
+                    <p className="text-[10px] text-[#f1c40f] font-bold leading-none mt-1 uppercase">Rektorat</p>
+                  </div>
+                </button>
+
+                {/* Dropdown Menu */}
+                {profileMenuOpen && (
+                  <>
+                    {/* Backdrop to close dropdown on click outside */}
+                    <div className="fixed inset-0 z-30" onClick={() => setProfileMenuOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl py-1 z-40 border border-slate-200 divide-y divide-slate-100 text-slate-800">
+                      <div className="px-4 py-2">
+                        <p className="text-xs font-semibold text-slate-400">Masuk sebagai</p>
+                        <p className="text-xs font-bold text-slate-800 truncate mt-0.5">{user?.email}</p>
+                      </div>
+                      <div className="py-1">
+                        <Link
+                          href="/settings"
+                          className="flex items-center space-x-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium transition-all"
+                          onClick={() => setProfileMenuOpen(false)}
+                        >
+                          <Settings size={16} className="text-slate-500" />
+                          <span>Pengaturan</span>
+                        </Link>
+                      </div>
+                      <div className="py-1">
+                        <button
+                          onClick={() => {
+                            setProfileMenuOpen(false)
+                            logout()
+                          }}
+                          className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-semibold transition-all text-left"
+                        >
+                          <LogOut size={16} className="text-red-500" />
+                          <span>Keluar</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
         </header>
 
-        {/* Content */}
-        <div className="p-8">
+        {/* Scrollable Dashboard Body */}
+        <main className="flex-1 overflow-y-auto px-6 py-8 space-y-8 max-w-[1600px] w-full mx-auto">
+          
+          {controlError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-red-800 text-sm flex items-center space-x-3 shadow-sm">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
+              <span className="font-semibold">{controlError}</span>
+            </div>
+          )}
+
+          {/* Top Information Strip */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3 md:space-y-0">
+            <div className="flex items-center space-x-3">
+              <div className="w-3.5 h-3.5 rounded-full bg-emerald-600 flex items-center justify-center">
+                <div className="w-2 h-2 rounded-full bg-white" />
+              </div>
+              <div>
+                <p className="text-slate-900 text-sm font-bold">Status Jaringan Sensor & IoT Kampus</p>
+                <p className="text-slate-500 text-xs">Node monitoring pada gedung Fakultas terhubung penuh ke sistem pusat</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <span className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold uppercase tracking-wider">
+                <ShieldCheck size={14} className="text-emerald-700" />
+                <span>Sistem Aktif</span>
+              </span>
+              <span className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold uppercase tracking-wider">
+                <Cpu size={14} className="text-blue-700" />
+                <span>Gateway Sinkron</span>
+              </span>
+            </div>
+          </div>
+
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-            <KPICard
-              title="AC - Daya Saat Ini"
-              value={`${currentAcPower.toFixed(2)} kW`}
-              change="+5%"
-              icon={<Zap className="text-orange-500" size={20} />}
-              bgColor="bg-orange-50"
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <KpiCard
+              title="Total Beban Universitas"
+              value={`${totalUniversityPower.toFixed(2)} kW`}
+              sub="Agregasi Waktu Nyata"
+              icon={<Zap size={18} />}
+              colorClass="border-l-4 border-l-[#0f2d59]"
+              iconBg="bg-blue-50 text-[#0f2d59]"
+              loading={loading}
             />
-            <KPICard
-              title="Lampu - Daya Saat Ini"
-              value={`${currentLampPower.toFixed(2)} kW`}
-              change="+3%"
-              icon={<Zap className="text-blue-500" size={20} />}
-              bgColor="bg-blue-50"
+            <KpiCard
+              title="Fakultas Terintegrasi"
+              value="2 / 10"
+              sub="Fase Pemantauan Kampus"
+              icon={<Building2 size={18} />}
+              colorClass="border-l-4 border-l-indigo-600"
+              iconBg="bg-indigo-50 text-indigo-700"
+              loading={false}
             />
-            <KPICard
-              title="Suhu AC Rata-rata"
-              value={`${avgAcTemp}°C`}
-              change="+2%"
-              icon={<Gauge className="text-green-500" size={20} />}
-              bgColor="bg-green-50"
+            <KpiCard
+              title="Total Perangkat Terbaca"
+              value={`${totalActive} / ${totalDevices}`}
+              sub="Instalasi AC & Penerangan"
+              icon={<Activity size={18} />}
+              colorClass="border-l-4 border-l-emerald-600"
+              iconBg="bg-emerald-50 text-emerald-700"
+              loading={loading}
             />
-            <KPICard
-              title="VS321 - Suhu Rata-rata"
-              value={`${avgSensorTemp}°C`}
-              change={`${latestSensorHumidity.toFixed(1)}% RH`}
-              icon={<Activity className="text-cyan-600" size={20} />}
-              bgColor="bg-cyan-50"
-            />
-            <KPICard
-              title="Total Perangkat Aktif"
-              value={`${filteredDevices.filter((d) => isDeviceOnline(d)).length}`}
-              change={`${sensorDevices.length} sensor`}
-              icon={<Activity className="text-purple-500" size={20} />}
-              bgColor="bg-purple-50"
+            <KpiCard
+              title="Potensi Efisiensi Daya"
+              value="18.4%"
+              sub="Optimasi Beban Pendingin"
+              icon={<TrendingDown size={18} />}
+              colorClass="border-l-4 border-l-amber-600"
+              iconBg="bg-amber-50 text-amber-700"
+              loading={false}
             />
           </div>
 
-          {/* Advanced Analytics Row 1 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* AC & Lamp Consumption */}
-            <div className="bg-white rounded-xl card-shadow p-6 hover:shadow-xl smooth-transition">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Konsumsi Daya AC & Lampu</h3>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={energyData.length > 0 ? energyData : generateMockCharData()}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="time" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Legend />
-                  <Bar dataKey="ac" fill="#d8ae47" radius={[4, 4, 0, 0]} name="Daya AC (kW)" />
-                  <Bar dataKey="lamp" fill="#483688" radius={[4, 4, 0, 0]} name="Daya Lampu (kW)" />
-                </BarChart>
-              </ResponsiveContainer>
+          {/* Faculty Grid */}
+          <div>
+            <h2 className="text-slate-900 font-extrabold text-base tracking-tight mb-4 flex items-center space-x-2">
+              <span className="w-1.5 h-5 bg-[#0f2d59]" />
+              <span className="uppercase tracking-wider text-xs font-bold text-slate-500">Pemantauan Tingkat Fakultas</span>
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+              {faculties.map(f => (
+                <FacultyCard key={f.id} faculty={f} loading={f.id === 'psikologi' && loading} />
+              ))}
+            </div>
+          </div>
+
+          {/* Charts & Analytics Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Main Bar Chart Container */}
+            <div className="lg:col-span-2 rounded-xl p-6 bg-white border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div>
+                  <h3 className="text-slate-900 font-bold text-base tracking-tight">Konsumsi Energi Fakultatif</h3>
+                  <p className="text-slate-500 text-xs">Perbandingan pemakaian beban listrik aktif antarfakultas saat ini</p>
+                </div>
+                <div className="flex bg-slate-100 p-1 rounded border border-slate-200">
+                  {(['daily', 'monthly'] as const).map(m => (
+                    <button
+                      key={m}
+                      onClick={() => setChartMode(m)}
+                      className={`px-4 py-1 rounded text-xs font-bold transition-all ${
+                        chartMode === m 
+                          ? 'bg-[#0f2d59] text-white shadow-sm' 
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {m === 'daily' ? 'Harian' : 'Bulanan'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex-1 w-full min-h-[260px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey={chartKey} stroke="#475569" tick={{ fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} />
+                    <YAxis stroke="#475569" tick={{ fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} unit=" kW" />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 6, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}
+                      labelStyle={{ color: '#64748b', fontWeight: 700, fontSize: 12 }}
+                      itemStyle={{ fontSize: 12, padding: 0 }}
+                    />
+                    <Legend iconType="square" wrapperStyle={{ fontSize: 11, fontWeight: 700, color: '#475569', paddingTop: 15 }} />
+                    <Bar dataKey="psikologi" name="Fakultas Psikologi" fill="#0f2d59" radius={0} barSize={20} />
+                    <Bar dataKey="fbs" name="Fakultas Bahasa & Seni" fill="#0d9488" radius={0} barSize={20} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
-            {/* Monthly Trend */}
-            <div className="bg-white rounded-xl card-shadow p-6 hover:shadow-xl smooth-transition">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Tren Bulanan</h3>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={monthlyData.length > 0 ? monthlyData : generateMockMonthlyData()}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Legend />
-                  <Line type="monotone" dataKey="ac" stroke="#d8ae47" strokeWidth={2} name="AC (kWh)" />
-                  <Line type="monotone" dataKey="lamp" stroke="#483688" strokeWidth={2} name="Lampu (kWh)" />
-                  <Line type="monotone" dataKey="sensorTemp" stroke="#0ea5e9" strokeWidth={2} strokeDasharray="5 3" name="VS321 Suhu (°C)" />
-                  <Line type="monotone" dataKey="sensorHumidity" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" name="VS321 Humidity (%)" />
+            {/* Distribution Pie Chart Container */}
+            <div className="rounded-xl p-6 bg-white border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <h3 className="text-slate-900 font-bold text-base tracking-tight">Proporsi Distribusi Beban</h3>
+                <p className="text-slate-500 text-xs">Persentase daya aktif terdistribusi hari ini</p>
+              </div>
+              
+              {loading ? (
+                <div className="flex-1 flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0f2d59]" />
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col justify-center">
+                  <div className="w-full h-[180px] relative">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={75} paddingAngle={4} dataKey="value">
+                          {pieData.map((entry, i) => <Cell key={i} fill={entry.fill} stroke="#ffffff" strokeWidth={2} />)}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 6 }}
+                          formatter={(v: number) => [`${v} kW`]}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    {/* Center Text */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total</span>
+                      <span className="text-lg font-extrabold text-[#0f2d59] mt-0.5">{totalUniversityPower.toFixed(1)} kW</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 mt-2 bg-slate-50 p-4 rounded border border-slate-200">
+                    {pieData.map(p => (
+                      <div key={p.name} className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-3 h-3 rounded-sm" style={{ background: p.fill }} />
+                          <span className="text-slate-700 text-xs font-bold">{p.name}</span>
+                        </div>
+                        <span className="text-slate-900 font-extrabold text-xs">{p.value} kW</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 6-Month Trend Line Chart */}
+          <div className="rounded-xl p-6 bg-white border border-slate-200 shadow-sm">
+            <div className="mb-6">
+              <h3 className="text-slate-900 font-bold text-base tracking-tight">Tren Akumulasi Penggunaan Bulanan (kWh)</h3>
+              <p className="text-slate-500 text-xs">Statistik pemakaian daya historis dalam kurun waktu 6 bulan terakhir</p>
+            </div>
+            
+            <div className="w-full h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="label" stroke="#475569" tick={{ fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} />
+                  <YAxis stroke="#475569" tick={{ fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} unit=" kWh" />
+                  <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', borderRadius: 6 }} />
+                  <Legend iconType="square" wrapperStyle={{ fontSize: 11, fontWeight: 700, color: '#475569', paddingTop: 15 }} />
+                  <Line type="monotone" dataKey="psikologi" name="Fakultas Psikologi" stroke="#0f2d59" strokeWidth={3} dot={{ fill: '#0f2d59', r: 4 }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="fbs" name="Fakultas Bahasa & Seni" stroke="#0d9488" strokeWidth={3} dot={{ fill: '#0d9488', r: 4 }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="total" name="Total Universitas" stroke="#eab308" strokeWidth={2} strokeDasharray="4 4" dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Device Management */}
-          <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-6">
-            {/* AC & Lamp Devices Table */}
-            <div className="bg-white rounded-xl card-shadow p-6 hover:shadow-xl smooth-transition">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Status Perangkat AC, Lampu, dan VS321 Sensor</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Lokasi</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Perangkat</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Tipe</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Daya (kW)</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Suhu (°C)</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Device EUI</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredDevices.map((device) => (
-                      <tr key={device.id} className="border-b border-gray-100 hover:bg-gray-50 smooth-transition">
-                        <td className="py-3 px-4 font-medium text-gray-900">{device.location}</td>
-                        <td className="py-3 px-4 text-gray-600">{device.device_name}</td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            device.device_type === 'AC'
-                              ? 'bg-orange-100 text-orange-700'
-                              : device.device_type === 'LAMP'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-cyan-100 text-cyan-700'
-                          }`}>
-                            {device.device_type}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-gray-900 font-semibold">{(parseFloat(String(device.current_power)) || 0).toFixed(2)} kW</td>
-                        <td className="py-3 px-4 text-gray-600">{(parseFloat(String(device.current_temperature)) || 0).toFixed(1)}°C</td>
-                        <td className="py-3 px-4 text-gray-600 text-xs font-mono">{device.device_eui}</td>
-                        <td className="py-3 px-4">
-                          {(() => {
-                            const online = isDeviceOnline(device)
-                            return (
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            online
-                              ? 'bg-green-100 text-green-700' 
-                              : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {online ? '● Online' : '○ Offline'}
-                          </span>
-                            )
-                          })()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {/* Unified Device Control Table */}
+          <div className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-200 bg-[#0f2d59]/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-slate-900 font-bold text-base tracking-tight">Daftar Kontrol Perangkat Kampus</h3>
+                <p className="text-slate-500 text-xs">Sentralisasi kontrol saklar perangkat beban (AC & Lampu) per fakultas</p>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-slate-500 text-xs font-bold uppercase tracking-wider hidden lg:inline-block">Kontrol Kelas:</span>
+                {liveClassCodes.map(code => (
+                  <div key={code} className="flex items-center space-x-1 bg-white p-1 rounded border border-slate-200">
+                    <span className="text-slate-700 text-xs font-bold px-2">{code}</span>
+                    <button
+                      onClick={() => handleLiveClassControl(code, 'on')}
+                      disabled={classControlLoading[code]}
+                      className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all disabled:opacity-50"
+                    >
+                      ON
+                  </button>
+                    <button
+                      onClick={() => handleLiveClassControl(code, 'off')}
+                      disabled={classControlLoading[code]}
+                      className="px-2 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all disabled:opacity-50"
+                    >
+                      OFF
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
+
+            <div className="overflow-x-auto" style={{ maxHeight: 420, overflowY: 'auto' }}>
+              <table className="w-full text-sm text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 sticky top-0 z-10">
+                    {['Fakultas', 'Gedung / Ruang', 'Nama Alat', 'Tipe', 'Daya Aktif', 'Koneksi', 'Aksi Kendali'].map(h => (
+                      <th key={h} className="py-3 px-6 font-bold text-xs uppercase tracking-wider border-b border-slate-200">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {allRows.map((row, i) => (
+                    <tr key={i} className="hover:bg-slate-50/80 transition-all odd:bg-white even:bg-slate-50/30">
+                      <td className="py-3.5 px-6 font-bold text-slate-800">{row.faculty}</td>
+                      <td className="py-3.5 px-6 text-slate-700 font-semibold">{row.room}</td>
+                      <td className="py-3.5 px-6 text-slate-600 font-medium">{row.device}</td>
+                      <td className="py-3.5 px-6">
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold border ${
+                          row.type === 'AC' 
+                            ? 'bg-orange-50 text-orange-700 border-orange-200' 
+                            : row.type === 'LAMP' 
+                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200' 
+                            : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}>{row.type}</span>
+                      </td>
+                      <td className="py-3.5 px-6 text-slate-900 font-bold">
+                        {row.power.toFixed(2)} kW
+                      </td>
+                      <td className="py-3.5 px-6">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${
+                          row.status === 'online' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${row.status === 'online' ? 'bg-emerald-600' : 'bg-slate-400'}`} />
+                          {row.status === 'online' ? 'Terhubung' : 'Terputus'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-6">
+                        {row.faculty === 'FBS' ? (
+                          <button
+                            onClick={() => handleFbsDeviceToggle(row.device)}
+                            className={`flex items-center justify-center space-x-1 px-3 py-1.5 rounded text-xs font-bold transition-all ${
+                              row.status === 'online'
+                                ? 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                            }`}
+                          >
+                            <Power size={11} />
+                            <span>{row.status === 'online' ? 'Matikan' : 'Nyalakan'}</span>
+                          </button>
+                        ) : ['ac', 'projector'].includes(String(row.type).toLowerCase()) ? (
+                          <div className="flex items-center space-x-1.5">
+                            <button
+                              onClick={() => row.deviceId && handleDummyDeviceToggle(row.deviceId, 'on')}
+                              disabled={row.status === 'online'}
+                              className={`px-2 py-1 rounded text-white text-xs font-bold transition-all shadow-sm active:scale-95 duration-200 ${
+                                row.status === 'online'
+                                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                                  : 'bg-emerald-600 hover:bg-emerald-700 hover:shadow-md'
+                              }`}
+                            >
+                              ON
+                            </button>
+                            <button
+                              onClick={() => row.deviceId && handleDummyDeviceToggle(row.deviceId, 'off')}
+                              disabled={row.status !== 'online'}
+                              className={`px-2 py-1 rounded text-white text-xs font-bold transition-all shadow-sm active:scale-95 duration-200 ${
+                                row.status !== 'online'
+                                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                                  : 'bg-red-600 hover:bg-red-700 hover:shadow-md'
+                              }`}
+                            >
+                              OFF
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-1.5">
+                            <button
+                              onClick={() => row.location && handleLiveClassControl(row.location, 'on')}
+                              disabled={row.location ? classControlLoading[row.location] : false}
+                              className="px-2.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all disabled:opacity-50"
+                            >
+                              ON
+                            </button>
+                            <button
+                              onClick={() => row.location && handleLiveClassControl(row.location, 'off')}
+                              disabled={row.location ? classControlLoading[row.location] : false}
+                              className="px-2.5 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all disabled:opacity-50"
+                            >
+                              OFF
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )) }
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </main>
+      </div>
+
+    </div>
+  )
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function KpiCard({ title, value, sub, icon, colorClass, iconBg, loading }: {
+  title: string; value: string; sub: string; icon: React.ReactNode; colorClass: string; iconBg: string; loading: boolean
+}) {
+  return (
+    <div className={`rounded-xl p-5 shadow-sm bg-white border border-slate-200 transition-all ${colorClass}`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">{title}</span>
+        <div className={`p-2 rounded ${iconBg}`}>
+          {icon}
+        </div>
+      </div>
+      {loading ? (
+        <div className="h-8 w-24 bg-slate-100 rounded animate-pulse" />
+      ) : (
+        <h3 className="text-xl font-extrabold text-[#0f2d59] tracking-tight leading-none">{value}</h3>
+      )}
+      <p className="text-slate-400 text-xs mt-2 font-medium">{sub}</p>
+    </div>
+  )
+}
+
+function FacultyCard({ faculty: f, loading }: { faculty: FacultyCard; loading: boolean }) {
+  const isSoon = f.mode === 'soon'
+  return (
+    <div
+      className={`rounded-xl p-5 shadow-sm bg-white border border-slate-200 relative overflow-hidden transition-all ${
+        !isSoon ? 'hover:shadow-md border-t-4' : 'border-t-4 border-t-slate-300 opacity-60'
+      }`}
+      style={!isSoon ? { borderTopColor: f.accentColor } : {}}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-3xl filter">{f.icon}</span>
+        <span className={`px-2.5 py-1 rounded text-[10px] font-bold tracking-wider border ${
+          !isSoon 
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+            : 'bg-slate-100 text-slate-500 border-slate-200'
+        }`}>
+          {!isSoon ? 'TERKONEKSI' : 'SEGERA'}
+        </span>
+      </div>
+      
+      <h3 className="text-slate-800 font-extrabold text-base mb-1.5 leading-tight">{f.name}</h3>
+      
+      {isSoon ? (
+        <div className="mt-3">
+          <p className="text-slate-400 text-xs font-semibold tracking-wider">{f.statusText}</p>
+          <div className="mt-4 w-full py-2 bg-slate-50 border border-slate-200 text-slate-400 rounded text-center text-xs font-bold">
+            Tahap Perencanaan
           </div>
         </div>
-      </main>
-    </div>
-  )
-}
-
-function NavItem({
-  icon,
-  label,
-  active = false,
-  sidebarOpen,
-  href = '#'
-}: {
-  icon: React.ReactNode
-  label: string
-  active?: boolean
-  sidebarOpen: boolean
-  href?: string
-}) {
-  return (
-    <Link
-      href={href}
-      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg smooth-transition ${
-        active ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10'
-      }`}
-    >
-      {icon}
-      {sidebarOpen && <span className="text-sm font-medium">{label}</span>}
-    </Link>
-  )
-}
-
-function KPICard({
-  title,
-  value,
-  change,
-  icon,
-  bgColor,
-}: {
-  title: string
-  value: string
-  change: string
-  icon: React.ReactNode
-  bgColor: string
-}) {
-  return (
-    <div className="bg-white rounded-lg card-shadow p-4 hover:shadow-lg smooth-transition">
-      <div className="flex items-start justify-between">
+      ) : (
         <div>
-          <p className="text-gray-500 text-xs font-medium uppercase tracking-wider">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          <p className="text-xs text-green-600 font-medium mt-2">{change}</p>
+          {loading ? (
+            <div className="space-y-2 mt-3">
+              <div className="h-4 bg-slate-100 rounded animate-pulse w-3/4" />
+              <div className="h-4 bg-slate-100 rounded animate-pulse w-1/2" />
+            </div>
+          ) : (
+            <div className="space-y-2 mt-3 text-xs text-slate-500">
+              <div className="flex justify-between border-b border-slate-100 pb-1.5">
+                <span>Total Daya Aktif</span>
+                <span className="text-slate-900 font-extrabold">{f.totalPower.toFixed(2)} kW</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-100 pb-1.5">
+                <span>Rasio Perangkat Aktif</span>
+                <span className="text-slate-800 font-semibold">{f.activeDevices} / {f.deviceCount} Alat</span>
+              </div>
+              <div className="flex justify-between pb-0.5">
+                <span>Jumlah Ruang Kelas</span>
+                <span className="text-slate-800 font-semibold">{f.rooms} Ruangan</span>
+              </div>
+            </div>
+          )}
+          <Link
+            href={f.href}
+            className="mt-4 w-full flex items-center justify-center space-x-1 py-2.5 rounded text-xs font-bold transition-all shadow-sm text-white hover:opacity-95"
+            style={{ 
+              backgroundColor: f.accentColor
+            }}
+          >
+            <span>Buka Dashboard Monitor →</span>
+          </Link>
         </div>
-        <div className={`${bgColor} p-3 rounded-lg`}>{icon}</div>
-      </div>
+      )}
     </div>
   )
-}
-
-// Dynamic helper functions for real-time mock data based on current date
-function generateMockCharData(): ChartDataPoint[] {
-  const data: ChartDataPoint[] = []
-  
-  // Generate hourly data for today with realistic pattern
-  for (let hour = 0; hour < 24; hour += 4) {
-    const time = String(hour).padStart(2, '0') + ':00'
-    // Power varies realistically: low at night, peak during day
-    const acBase = 15 + Math.sin((hour - 6) * Math.PI / 12) * 15 + Math.random() * 5
-    const lampBase = 8 + Math.cos((hour - 12) * Math.PI / 12) * 10 + Math.random() * 3
-    
-    data.push({
-      time,
-      ac: Math.max(5, Math.round(acBase * 100) / 100),
-      lamp: Math.max(2, Math.round(lampBase * 100) / 100),
-    })
-  }
-  
-  return data
-}
-
-function generateMockMonthlyData(): ChartDataPoint[] {
-  const now = new Date()
-  const currentMonth = now.getMonth()
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const data: ChartDataPoint[] = []
-  
-  // Generate last 6 months including current month
-  for (let i = 5; i >= 0; i--) {
-    const monthIndex = (currentMonth - i + 12) % 12
-    const monthName = monthNames[monthIndex]
-    
-    // Seasonal variation: higher in summer, lower in winter
-    const seasonalFactor = 1 + Math.sin((monthIndex - 5) * Math.PI / 6) * 0.3
-    const acBase = 450 * seasonalFactor + Math.random() * 100
-    const lampBase = 240 * seasonalFactor + Math.random() * 50
-    
-    data.push({
-      month: monthName,
-      ac: Math.round(acBase * 100) / 100,
-      lamp: Math.round(lampBase * 100) / 100,
-    })
-  }
-  
-  return data
-}
-
-function mergeHourlySeries(seriesList: any[][]): ChartDataPoint[] {
-  const hourMap = new Map<string, {
-    time: string
-    ac: number
-    lamp: number
-    sensorTemps: number[]
-    sensorHumiditys: number[]
-  }>()
-
-  ;(seriesList || []).forEach((series) => {
-    (series || []).forEach((item: any) => {
-      const time = item.time || item.hour_start || '00:00'
-      const existing = hourMap.get(time) || {
-        time,
-        ac: 0,
-        lamp: 0,
-        sensorTemps: [],
-        sensorHumiditys: [],
-      }
-
-      existing.ac += Number(item.ac ?? item.ac_total ?? item.total_consumption ?? 0) || 0
-      existing.lamp += Number(item.lamp ?? item.lamp_total ?? 0) || 0
-
-      const sensorTemp = Number(item.sensorTemp ?? item.avg_temperature)
-      const sensorHumidity = Number(item.sensorHumidity ?? item.avg_humidity)
-
-      if (Number.isFinite(sensorTemp) && sensorTemp > 0) {
-        existing.sensorTemps.push(sensorTemp)
-      }
-
-      if (Number.isFinite(sensorHumidity) && sensorHumidity > 0) {
-        existing.sensorHumiditys.push(sensorHumidity)
-      }
-
-      hourMap.set(time, existing)
-    })
-  })
-
-  return [...hourMap.values()]
-    .sort((left, right) => left.time.localeCompare(right.time))
-    .map((entry) => ({
-      time: entry.time,
-      ac: Math.round(entry.ac * 100) / 100,
-      lamp: Math.round(entry.lamp * 100) / 100,
-      sensorTemp: entry.sensorTemps.length > 0
-        ? entry.sensorTemps.reduce((sum, value) => sum + value, 0) / entry.sensorTemps.length
-        : 0,
-      sensorHumidity: entry.sensorHumiditys.length > 0
-        ? entry.sensorHumiditys.reduce((sum, value) => sum + value, 0) / entry.sensorHumiditys.length
-        : 0,
-    }))
-}
-
-function buildMonthlyTypeSeries(apiRows: any[], months: number = 6): ChartDataPoint[] {
-  const monthMap: Record<string, { ac: number; lamp: number }> = {}
-
-  ;(apiRows || []).forEach((row: any) => {
-    if (!row?.month_key) {
-      return
-    }
-
-    const [yearStr, monthStr] = String(row.month_key).split('-')
-    const year = parseInt(yearStr, 10)
-    const monthIndex = parseInt(monthStr, 10) - 1
-    if (Number.isNaN(year) || Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
-      return
-    }
-
-    const monthLabel = new Date(year, monthIndex, 1).toLocaleString('en-US', { month: 'short' })
-    monthMap[monthLabel] = {
-      ac: parseFloat(row.ac_total) || 0,
-      lamp: parseFloat(row.lamp_total) || 0,
-      sensorTemp: parseFloat(row.avg_temperature) || 0,
-      sensorHumidity: parseFloat(row.avg_humidity) || 0,
-    }
-  })
-
-  const now = new Date()
-  const result: ChartDataPoint[] = []
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const label = d.toLocaleString('en-US', { month: 'short' })
-    result.push({
-      month: label,
-      ac: monthMap[label]?.ac || 0,
-      lamp: monthMap[label]?.lamp || 0,
-      sensorTemp: monthMap[label]?.sensorTemp || 0,
-      sensorHumidity: monthMap[label]?.sensorHumidity || 0,
-    })
-  }
-
-  return result
 }
