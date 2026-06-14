@@ -109,7 +109,7 @@ class Consumption {
         FROM device_consumption dc
         LEFT JOIN devices d ON dc.device_id = d.id
         LEFT JOIN classes c_device ON d.class_id = c_device.id
-        LEFT JOIN classes c_class ON RIGHT(c_class.name, 2) = dc.id_class
+        LEFT JOIN classes c_class ON (c_class.id = CAST(dc.id_class AS UNSIGNED) OR RIGHT(c_class.name, 2) = dc.id_class)
         WHERE (c_device.id = ? OR c_class.id = ?) AND dc.consumption_date BETWEEN ? AND ?
         ORDER BY dc.consumption_date, dc.hour_start
       `, [classId, classId, startDate, endDate]);
@@ -210,7 +210,7 @@ class Consumption {
         FROM device_consumption dc
         LEFT JOIN devices d ON d.id = dc.device_id
         LEFT JOIN classes c_device ON d.class_id = c_device.id
-        LEFT JOIN classes c_class ON RIGHT(c_class.name, 2) = dc.id_class
+        LEFT JOIN classes c_class ON (c_class.id = CAST(dc.id_class AS UNSIGNED) OR RIGHT(c_class.name, 2) = dc.id_class)
         WHERE dc.consumption_date >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL ? - 1 MONTH)
           AND dc.consumption_date < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
           ${classFilter}
@@ -332,7 +332,7 @@ class Consumption {
         FROM device_consumption dc
         LEFT JOIN devices d ON dc.device_id = d.id
         LEFT JOIN classes c_device ON d.class_id = c_device.id
-        LEFT JOIN classes c_class ON RIGHT(c_class.name, 2) = dc.id_class
+        LEFT JOIN classes c_class ON (c_class.id = CAST(dc.id_class AS UNSIGNED) OR RIGHT(c_class.name, 2) = dc.id_class)
         WHERE (c_device.id = ? OR c_class.id = ?) AND dc.consumption_date BETWEEN ? AND ?
         GROUP BY COALESCE(d.id, CONCAT('class-', dc.id_class)), COALESCE(d.device_name, CONCAT('Class ', COALESCE(c_class.name, dc.id_class))), COALESCE(d.device_type, 'CLASS')
         ORDER BY total_consumption DESC
@@ -364,7 +364,7 @@ class Consumption {
         FROM device_consumption dc
         LEFT JOIN devices d ON dc.device_id = d.id
         LEFT JOIN classes c_device ON d.class_id = c_device.id
-        LEFT JOIN classes c_class ON RIGHT(c_class.name, 2) = dc.id_class
+        LEFT JOIN classes c_class ON (c_class.id = CAST(dc.id_class AS UNSIGNED) OR RIGHT(c_class.name, 2) = dc.id_class)
         WHERE (c_device.id = ? OR c_class.id = ?) AND dc.consumption_date = ?
         GROUP BY dc.hour_start
         ORDER BY dc.hour_start
