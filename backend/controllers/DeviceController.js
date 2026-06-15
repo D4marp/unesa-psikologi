@@ -11,6 +11,46 @@ const CLASS_PORTS = {
   q10111: { className: "Q1.01.11", tcpPort: 5111 }
 };
 
+// Target hosts and ports for dynamic control of ac, lamp, and projector
+const LAMP_GATEWAY_HOST = process.env.LAMP_GATEWAY_HOST || process.env.GATEWAY_HOST || "10.12.1.150";
+const MINI_PC_NODE_RED_HOST = process.env.MINI_PC_NODE_RED_HOST || "127.0.0.1";
+
+const TARGETS = {
+  lamp: {
+    label: "WS501/WS502 Lamp",
+    host: LAMP_GATEWAY_HOST,
+    ports: {
+      q10102: 5102,
+      q10103: 5103,
+      q10104: 5104,
+      q10109: 5109,
+      q10111: 5111
+    }
+  },
+  projector: {
+    label: "Projector",
+    host: MINI_PC_NODE_RED_HOST,
+    ports: {
+      q10102: 5102,
+      q10103: 5103,
+      q10104: 5104,
+      q10109: 5109,
+      q10111: 5111
+    }
+  },
+  ac: {
+    label: "AC",
+    host: MINI_PC_NODE_RED_HOST,
+    ports: {
+      q10102: 5202,
+      q10103: 5203,
+      q10104: 5204,
+      q10109: 5209,
+      q10111: 5211
+    }
+  }
+};
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -368,28 +408,46 @@ class DeviceController {
       const classCode = device.location || device.class_name || null;
       const classKey = classCode ? String(classCode).toLowerCase().replace(/\./g, '') : '';
 
-      // Check if classroom is mapped in CLASS_PORTS for direct TCP control
-      if (classKey && CLASS_PORTS[classKey]) {
-        const cfg = CLASS_PORTS[classKey];
-        const gatewayHost = process.env.GATEWAY_HOST || '10.12.1.150';
-        const tcpPayload = { state: normalizedAction };
+      // Normalize device type
+      let targetType = 'lamp';
+      const devType = String(device.device_type || '').toLowerCase();
+      if (devType.includes('ac')) {
+        targetType = 'ac';
+      } else if (devType.includes('projector') || devType.includes('proyektor')) {
+        targetType = 'projector';
+      } else if (devType.includes('lamp') || devType.includes('cahaya')) {
+        targetType = 'lamp';
+      }
+
+      // Check if classroom is mapped in TARGETS for direct TCP control
+      const target = TARGETS[targetType];
+      if (target && classKey && target.ports[classKey]) {
+        const tcpPort = target.ports[classKey];
+        const host = target.host;
+        const tcpPayload = {
+          state: normalizedAction,
+          device: targetType,
+          classKey: classKey,
+          source: "web_api"
+        };
 
         try {
-          const tcpResult = await sendTcpCommand(gatewayHost, cfg.tcpPort, tcpPayload);
+          const tcpResult = await sendTcpCommand(host, tcpPort, tcpPayload);
           const nextStatus = normalizedAction === 'on' ? 'active' : 'idle';
           await Device.updateStatus(id, nextStatus);
 
           return res.json({
             success: true,
-            message: `Device ${normalizedAction.toUpperCase()} command sent successfully via TCP to ${cfg.className}`,
+            message: `${target.label} ${device.location || classCode} command ${normalizedAction.toUpperCase()} sent successfully via TCP`,
             data: {
               id: Number(id),
               action: normalizedAction,
               status: nextStatus,
               tcp: {
-                className: cfg.className,
-                gatewayHost,
-                tcpPort: cfg.tcpPort,
+                device: targetType,
+                className: device.location || classCode,
+                host,
+                port: tcpPort,
                 tcpAttempt: tcpResult.attempt
               }
             }
@@ -397,7 +455,7 @@ class DeviceController {
         } catch (err) {
           return res.status(500).json({
             success: false,
-            message: `Gagal mengirim command TCP ke ${cfg.className}`,
+            message: `Gagal mengirim command TCP ke ${device.location || classCode} untuk ${target.label}`,
             error: err.message
           });
         }
@@ -504,37 +562,60 @@ class DeviceController {
       const normalizedAction = String(finalAction).toLowerCase();
       const classKey = String(classCode).toLowerCase().replace(/\./g, '');
 
-      // Check if classroom is mapped in CLASS_PORTS for direct TCP control
-      if (CLASS_PORTS[classKey]) {
-        const cfg = CLASS_PORTS[classKey];
-        const gatewayHost = process.env.GATEWAY_HOST || '10.12.1.150';
-        const tcpPayload = { state: normalizedAction };
+      // Check if classroom is mapped in TARGETS for direct TCP control of all devices (lamp, projector, ac)
+      const tcpPromises = [];
+      for (const [targetKey, target] of Object.entries(TARGETS)) {
+        const port = target.ports[classKey];
+        if (port) {
+          const tcpPayload = {
+            state: normalizedAction,
+            device: targetKey,
+            classKey: classKey,
+            source: "web_api"
+          };
+          tcpPromises.push(
+            sendTcpCommand(target.host, port, tcpPayload)
+              .then(res => ({ success: true, device: targetKey, attempt: res.attempt }))
+              .catch(err => ({ success: false, device: targetKey, error: err.message }))
+          );
+        }
+      }
 
+      if (tcpPromises.length > 0) {
         try {
-          const tcpResult = await sendTcpCommand(gatewayHost, cfg.tcpPort, tcpPayload);
+          const results = await Promise.all(tcpPromises);
           const nextStatus = normalizedAction === 'on' ? 'active' : 'idle';
-          await Promise.all(devices.map((device) => Device.updateStatus(device.id, nextStatus)));
+          await Promise.all(devices.map((device) => {
+            if (device.device_type !== 'SENSOR') {
+              return Device.updateStatus(device.id, nextStatus);
+            }
+            return Promise.resolve();
+          }));
+
+          const failures = results.filter(r => !r.success);
+          if (failures.length === tcpPromises.length) {
+            return res.status(500).json({
+              success: false,
+              message: `Gagal mengirim command TCP ke semua perangkat di kelas ${classCode}`,
+              errors: failures
+            });
+          }
 
           return res.json({
             success: true,
-            message: `Class ${classCode} ${normalizedAction.toUpperCase()} command sent successfully via TCP`,
+            message: `Class ${classCode} ${normalizedAction.toUpperCase()} command sent to devices via TCP`,
             data: {
               classCode,
               action: normalizedAction,
               status: nextStatus,
               affectedDevices: devices.length,
-              tcp: {
-                className: cfg.className,
-                gatewayHost,
-                tcpPort: cfg.tcpPort,
-                tcpAttempt: tcpResult.attempt
-              }
+              results
             }
           });
         } catch (err) {
           return res.status(500).json({
             success: false,
-            message: `Gagal mengirim command TCP ke ${cfg.className}`,
+            message: `Gagal mengontrol perangkat kelas ${classCode}`,
             error: err.message
           });
         }
@@ -577,7 +658,12 @@ class DeviceController {
       }
 
       const nextStatus = normalizedAction === 'on' ? 'active' : 'idle';
-      await Promise.all(devices.map((device) => Device.updateStatus(device.id, nextStatus)));
+      await Promise.all(devices.map((device) => {
+        if (device.device_type !== 'SENSOR') {
+          return Device.updateStatus(device.id, nextStatus);
+        }
+        return Promise.resolve();
+      }));
 
       return res.json({
         success: true,
