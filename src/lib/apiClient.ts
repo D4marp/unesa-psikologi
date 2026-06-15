@@ -161,6 +161,13 @@ export const consumptionAPI = {
     return response.data;
   },
 
+  getByClass: async (classId: number, startDate: string, endDate: string) => {
+    const response = await apiCall<{ success: boolean; data: any[] }>(
+      `/consumption/class/${classId}?startDate=${startDate}&endDate=${endDate}`
+    );
+    return response.data;
+  },
+
   getMonthly: async (deviceId: number, month: string) => {
     const response = await apiCall<{ success: boolean; data: any[] }>(
       `/consumption/monthly/${deviceId}?month=${month}`

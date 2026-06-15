@@ -5,9 +5,9 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts'
 import {
-  Zap, Activity, Building2, Menu, Settings, LogOut, TrendingDown, Power, Clock, ShieldCheck, Cpu
+  Zap, Activity, Building2, Menu, Settings, LogOut, TrendingDown, Power, Clock, ShieldCheck, Cpu, X
 } from 'lucide-react'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { devicesAPI } from '@/lib/apiClient'
@@ -121,11 +121,21 @@ export default function RektoratDashboard() {
   const [now, setNow] = useState(new Date())
   const [monthlyData] = useState<ChartPoint[]>(generateMonthlyComparison())
   const [dailyData] = useState<ChartPoint[]>(generateDailyComparison())
+
+  const efficiencyPct = useMemo(() => {
+    if (monthlyData.length < 2) return 18.4
+    const prevMonth = monthlyData[monthlyData.length - 2].total
+    const currMonth = monthlyData[monthlyData.length - 1].total
+    if (prevMonth <= 0) return 0
+    return ((prevMonth - currMonth) / prevMonth) * 100
+  }, [monthlyData])
   const [fbsRows, setFbsRows] = useState<RoomRow[]>(FBS_DEVICES)
   const [classControlLoading, setClassControlLoading] = useState<Record<string, boolean>>({})
   const [chartMode, setChartMode] = useState<'daily' | 'monthly'>('daily')
   const [controlError, setControlError] = useState<string | null>(null)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [selectedCampus, setSelectedCampus] = useState<string | null>('lidah-wetan')
+  const [controlModalOpen, setControlModalOpen] = useState(false)
 
   // Clock
   useEffect(() => {
@@ -153,13 +163,13 @@ export default function RektoratDashboard() {
   const psiTotalPower = psiOnline.reduce((s, d) => s + (parseFloat(String(d.current_power)) || 0), 0)
   const psiRooms = new Set(liveDevices.map(d => d.location).filter(Boolean)).size
 
-  // Faculty cards config
-  const faculties: FacultyCard[] = [
+  // Faculty data structure linked to campuses
+  const facultyDataList = [
     {
       id: 'psikologi',
       name: 'Fakultas Psikologi',
       shortName: 'Psikologi',
-      mode: 'live',
+      mode: 'live' as const,
       totalPower: psiTotalPower,
       deviceCount: liveDevices.length,
       activeDevices: psiOnline.length,
@@ -167,13 +177,14 @@ export default function RektoratDashboard() {
       href: '/psikologi',
       accentColor: '#3b82f6', // Institutional Blue
       icon: '🧠',
-      statusText: 'TERKONEKSI'
+      statusText: 'TERKONEKSI',
+      campusId: 'lidah-wetan'
     },
     {
       id: 'fbs',
       name: 'Fakultas Bahasa dan Seni',
       shortName: 'FBS',
-      mode: 'live',
+      mode: 'live' as const,
       totalPower: FBS_TOTAL_POWER,
       deviceCount: FBS_DEVICES.length,
       activeDevices: fbsRows.filter(d => d.status === 'online').length,
@@ -181,26 +192,97 @@ export default function RektoratDashboard() {
       href: '/fbs',
       accentColor: '#0d9488', // Teal
       icon: '🎨',
-      statusText: 'TERKONEKSI'
+      statusText: 'TERKONEKSI',
+      campusId: 'lidah-wetan'
     },
     {
       id: 'ft',
       name: 'Fakultas Teknik',
       shortName: 'FT',
-      mode: 'soon',
+      mode: 'soon' as const,
       totalPower: 0, deviceCount: 0, activeDevices: 0, rooms: 0,
       href: '#', accentColor: '#94a3b8', icon: '⚙️',
-      statusText: 'INTEGRASI TAHAP II'
+      statusText: 'INTEGRASI TAHAP II',
+      campusId: 'ketintang'
     },
     {
       id: 'fe',
       name: 'Fakultas Ekonomi',
       shortName: 'FE',
-      mode: 'soon',
+      mode: 'soon' as const,
       totalPower: 0, deviceCount: 0, activeDevices: 0, rooms: 0,
       href: '#', accentColor: '#94a3b8', icon: '📈',
-      statusText: 'INTEGRASI TAHAP II'
+      statusText: 'INTEGRASI TAHAP II',
+      campusId: 'ketintang'
     },
+    {
+      id: 'magetan',
+      name: 'PSDKU Unesa Magetan',
+      shortName: 'PSDKU Magetan',
+      mode: 'soon' as const,
+      totalPower: 0, deviceCount: 0, activeDevices: 0, rooms: 0,
+      href: '#', accentColor: '#94a3b8', icon: '🏢',
+      statusText: 'INTEGRASI TAHAP II',
+      campusId: 'magetan'
+    },
+    {
+      id: 'pascasarjana',
+      name: 'Pascasarjana / Mustopo',
+      shortName: 'Pascasarjana',
+      mode: 'soon' as const,
+      totalPower: 0, deviceCount: 0, activeDevices: 0, rooms: 0,
+      href: '#', accentColor: '#eab308', icon: '🎓',
+      statusText: 'INTEGRASI TAHAP II',
+      campusId: 'mustopo'
+    }
+  ]
+
+  // Campus cards config
+  const campuses = [
+    {
+      id: 'lidah-wetan',
+      name: 'Kampus Lidah Wetan',
+      icon: '🏛️',
+      accentColor: '#0f2d59',
+      mode: 'live' as const,
+      totalPower: psiTotalPower + FBS_TOTAL_POWER,
+      deviceCount: liveDevices.length + FBS_DEVICES.length,
+      activeDevices: psiOnline.length + fbsRows.filter(d => d.status === 'online').length,
+      rooms: psiRooms + new Set(FBS_DEVICES.map(d => d.room)).size,
+    },
+    {
+      id: 'ketintang',
+      name: 'Kampus Ketintang',
+      icon: '🏫',
+      accentColor: '#0d9488',
+      mode: 'soon' as const,
+      totalPower: 0,
+      deviceCount: 0,
+      activeDevices: 0,
+      rooms: 0,
+    },
+    {
+      id: 'magetan',
+      name: 'Kampus Magetan',
+      icon: '🏢',
+      accentColor: '#94a3b8',
+      mode: 'soon' as const,
+      totalPower: 0,
+      deviceCount: 0,
+      activeDevices: 0,
+      rooms: 0,
+    },
+    {
+      id: 'mustopo',
+      name: 'Kampus Mustopo',
+      icon: '🏘️',
+      accentColor: '#eab308',
+      mode: 'soon' as const,
+      totalPower: 0,
+      deviceCount: 0,
+      activeDevices: 0,
+      rooms: 0,
+    }
   ]
 
   const totalUniversityPower = psiTotalPower + FBS_TOTAL_POWER
@@ -495,27 +577,46 @@ export default function RektoratDashboard() {
             />
             <KpiCard
               title="Potensi Efisiensi Daya"
-              value="18.4%"
-              sub="Optimasi Beban Pendingin"
+              value={`${efficiencyPct.toFixed(1)}%`}
+              sub={efficiencyPct >= 0 ? "Penurunan vs Bulan Lalu" : "Peningkatan vs Bulan Lalu"}
               icon={<TrendingDown size={18} />}
               colorClass="border-l-4 border-l-amber-600"
               iconBg="bg-amber-50 text-amber-700"
-              loading={false}
+              loading={loading}
             />
           </div>
 
-          {/* Faculty Grid */}
+          {/* Campus Grid */}
           <div>
             <h2 className="text-slate-900 font-extrabold text-base tracking-tight mb-4 flex items-center space-x-2">
               <span className="w-1.5 h-5 bg-[#0f2d59]" />
-              <span className="uppercase tracking-wider text-xs font-bold text-slate-500">Pemantauan Tingkat Fakultas</span>
+              <span className="uppercase tracking-wider text-xs font-bold text-slate-500">Pemantauan Tingkat Kampus</span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-              {faculties.map(f => (
-                <FacultyCard key={f.id} faculty={f} loading={f.id === 'psikologi' && loading} />
+              {campuses.map(c => (
+                <CampusCard key={c.id} campus={c} isSelected={selectedCampus === c.id} onClick={() => setSelectedCampus(selectedCampus === c.id ? null : c.id)} />
               ))}
             </div>
           </div>
+
+          {/* Faculty List for Selected Campus */}
+          {selectedCampus && (
+            <div className="mt-8 transition-all duration-300">
+              <h2 className="text-slate-900 font-extrabold text-base tracking-tight mb-4 flex items-center space-x-2">
+                <span className="w-1.5 h-5 bg-amber-500" />
+                <span className="uppercase tracking-wider text-xs font-bold text-slate-500">
+                  Daftar Fakultas: {campuses.find(c => c.id === selectedCampus)?.name}
+                </span>
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                {facultyDataList
+                  .filter(f => f.campusId === selectedCampus)
+                  .map(f => (
+                    <FacultyCard key={f.id} faculty={f as any} loading={f.id === 'psikologi' && loading} />
+                  ))}
+              </div>
+            </div>
+          )}
 
           {/* Charts & Analytics Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -634,136 +735,182 @@ export default function RektoratDashboard() {
             </div>
           </div>
 
-          {/* Unified Device Control Table */}
-          <div className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-200 bg-[#0f2d59]/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Quick Access Control Banner */}
+          <div className="rounded-xl p-6 bg-gradient-to-r from-[#0f2d59] to-[#1e3a8a] text-white border border-slate-200 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="flex items-center space-x-4 z-10">
+              <div className="p-3.5 bg-white/10 rounded-xl border border-white/10 text-[#f1c40f]">
+                <Cpu size={24} className="badge-live" />
+              </div>
               <div>
-                <h3 className="text-slate-900 font-bold text-base tracking-tight">Daftar Kontrol Perangkat Kampus</h3>
-                <p className="text-slate-500 text-xs">Sentralisasi kontrol saklar perangkat beban (AC & Lampu) per fakultas</p>
-              </div>
-              
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-slate-500 text-xs font-bold uppercase tracking-wider hidden lg:inline-block">Kontrol Kelas:</span>
-                {liveClassCodes.map(code => (
-                  <div key={code} className="flex items-center space-x-1 bg-white p-1 rounded border border-slate-200">
-                    <span className="text-slate-700 text-xs font-bold px-2">{code}</span>
-                    <button
-                      onClick={() => handleLiveClassControl(code, 'on')}
-                      disabled={classControlLoading[code]}
-                      className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all disabled:opacity-50"
-                    >
-                      ON
-                  </button>
-                    <button
-                      onClick={() => handleLiveClassControl(code, 'off')}
-                      disabled={classControlLoading[code]}
-                      className="px-2 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all disabled:opacity-50"
-                    >
-                      OFF
-                    </button>
-                  </div>
-                ))}
+                <h3 className="text-white font-extrabold text-lg tracking-tight">Pusat Kendali Perangkat Kampus</h3>
+                <p className="text-slate-200 text-xs mt-0.5">Akses cepat saklar IoT (AC & Penerangan) untuk seluruh ruangan kelas terhubung</p>
               </div>
             </div>
-
-            <div className="overflow-x-auto" style={{ maxHeight: 420, overflowY: 'auto' }}>
-              <table className="w-full text-sm text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 sticky top-0 z-10">
-                    {['Fakultas', 'Gedung / Ruang', 'Nama Alat', 'Tipe', 'Daya Aktif', 'Koneksi', 'Aksi Kendali'].map(h => (
-                      <th key={h} className="py-3 px-6 font-bold text-xs uppercase tracking-wider border-b border-slate-200">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {allRows.map((row, i) => (
-                    <tr key={i} className="hover:bg-slate-50/80 transition-all odd:bg-white even:bg-slate-50/30">
-                      <td className="py-3.5 px-6 font-bold text-slate-800">{row.faculty}</td>
-                      <td className="py-3.5 px-6 text-slate-700 font-semibold">{row.room}</td>
-                      <td className="py-3.5 px-6 text-slate-600 font-medium">{row.device}</td>
-                      <td className="py-3.5 px-6">
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold border ${
-                          row.type === 'AC' 
-                            ? 'bg-orange-50 text-orange-700 border-orange-200' 
-                            : row.type === 'LAMP' 
-                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200' 
-                            : 'bg-blue-50 text-blue-700 border-blue-200'
-                        }`}>{row.type}</span>
-                      </td>
-                      <td className="py-3.5 px-6 text-slate-900 font-bold">
-                        {row.power.toFixed(2)} kW
-                      </td>
-                      <td className="py-3.5 px-6">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${
-                          row.status === 'online' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${row.status === 'online' ? 'bg-emerald-600' : 'bg-slate-400'}`} />
-                          {row.status === 'online' ? 'Terhubung' : 'Terputus'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-6">
-                        {row.faculty === 'FBS' ? (
-                          <button
-                            onClick={() => handleFbsDeviceToggle(row.device)}
-                            className={`flex items-center justify-center space-x-1 px-3 py-1.5 rounded text-xs font-bold transition-all ${
-                              row.status === 'online'
-                                ? 'bg-slate-200 hover:bg-slate-300 text-slate-700'
-                                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
-                            }`}
-                          >
-                            <Power size={11} />
-                            <span>{row.status === 'online' ? 'Matikan' : 'Nyalakan'}</span>
-                          </button>
-                        ) : ['ac', 'projector'].includes(String(row.type).toLowerCase()) ? (
-                          <div className="flex items-center space-x-1.5">
-                            <button
-                              onClick={() => row.deviceId && handleDummyDeviceToggle(row.deviceId, 'on')}
-                              disabled={row.status === 'online'}
-                              className={`px-2 py-1 rounded text-white text-xs font-bold transition-all shadow-sm active:scale-95 duration-200 ${
-                                row.status === 'online'
-                                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                                  : 'bg-emerald-600 hover:bg-emerald-700 hover:shadow-md'
-                              }`}
-                            >
-                              ON
-                            </button>
-                            <button
-                              onClick={() => row.deviceId && handleDummyDeviceToggle(row.deviceId, 'off')}
-                              disabled={row.status !== 'online'}
-                              className={`px-2 py-1 rounded text-white text-xs font-bold transition-all shadow-sm active:scale-95 duration-200 ${
-                                row.status !== 'online'
-                                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                                  : 'bg-red-600 hover:bg-red-700 hover:shadow-md'
-                              }`}
-                            >
-                              OFF
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center space-x-1.5">
-                            <button
-                              onClick={() => row.location && handleLiveClassControl(row.location, 'on')}
-                              disabled={row.location ? classControlLoading[row.location] : false}
-                              className="px-2.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all disabled:opacity-50"
-                            >
-                              ON
-                            </button>
-                            <button
-                              onClick={() => row.location && handleLiveClassControl(row.location, 'off')}
-                              disabled={row.location ? classControlLoading[row.location] : false}
-                              className="px-2.5 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all disabled:opacity-50"
-                            >
-                              OFF
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )) }
-                </tbody>
-              </table>
-            </div>
+            <button
+              onClick={() => setControlModalOpen(true)}
+              className="z-10 px-6 py-3 bg-[#d8ae47] hover:bg-[#c59e3c] active:scale-95 text-[#0f2d59] font-black text-sm rounded-xl transition-all shadow-md flex items-center space-x-2"
+            >
+              <Power size={16} />
+              <span>Buka Panel Kontrol</span>
+            </button>
           </div>
+
+          {/* Device Control Modal */}
+          {controlModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              {/* Backdrop */}
+              <div className="fixed inset-0 bg-[#06142c]/75 backdrop-blur-sm transition-opacity" onClick={() => setControlModalOpen(false)} />
+              
+              {/* Modal Content */}
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[85vh] overflow-hidden relative z-10 flex flex-col transition-all duration-300">
+                <div className="p-6 border-b border-slate-200 bg-[#0f2d59] text-white flex items-center justify-between shadow-sm">
+                  <div>
+                    <h3 className="text-white font-extrabold text-lg tracking-tight">Panel Saklar & Kontrol Perangkat Kampus</h3>
+                    <p className="text-slate-300 text-xs mt-0.5">Sentralisasi kontrol saklar perangkat beban (AC & Lampu) per fakultas</p>
+                  </div>
+                  <button 
+                    onClick={() => setControlModalOpen(false)}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all focus:outline-none"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Kontrol Cepat Kelas:</span>
+                    {liveClassCodes.map(code => (
+                      <div key={code} className="flex items-center space-x-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                        <span className="text-slate-700 text-xs font-bold px-2">{code}</span>
+                        <button
+                          onClick={() => handleLiveClassControl(code, 'on')}
+                          disabled={classControlLoading[code]}
+                          className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold transition-all disabled:opacity-50"
+                        >
+                          ON
+                        </button>
+                        <button
+                          onClick={() => handleLiveClassControl(code, 'off')}
+                          disabled={classControlLoading[code]}
+                          className="px-2.5 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold transition-all disabled:opacity-50"
+                        >
+                          OFF
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto">
+                  <table className="w-full text-sm text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-100 text-slate-600 sticky top-0 z-10">
+                        {['Fakultas', 'Gedung / Ruang', 'Nama Alat', 'Tipe', 'Daya Aktif', 'Koneksi', 'Aksi Kendali'].map(h => (
+                          <th key={h} className="py-3.5 px-6 font-bold text-xs uppercase tracking-wider border-b border-slate-200">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {allRows.map((row, i) => (
+                        <tr key={i} className="hover:bg-slate-50/80 transition-all odd:bg-white even:bg-slate-50/30">
+                          <td className="py-3.5 px-6 font-bold text-slate-800">{row.faculty}</td>
+                          <td className="py-3.5 px-6 text-slate-700 font-semibold">{row.room}</td>
+                          <td className="py-3.5 px-6 text-slate-600 font-medium">{row.device}</td>
+                          <td className="py-3.5 px-6">
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold border ${
+                              row.type === 'AC' 
+                                ? 'bg-orange-50 text-orange-700 border-orange-200' 
+                                : row.type === 'LAMP' 
+                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200' 
+                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                            }`}>{row.type}</span>
+                          </td>
+                          <td className="py-3.5 px-6 text-slate-900 font-bold">
+                            {row.power.toFixed(2)} kW
+                          </td>
+                          <td className="py-3.5 px-6">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${
+                              row.status === 'online' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${row.status === 'online' ? 'bg-emerald-600' : 'bg-slate-400'}`} />
+                              {row.status === 'online' ? 'Terhubung' : 'Terputus'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-6">
+                            {row.faculty === 'FBS' ? (
+                              <button
+                                onClick={() => handleFbsDeviceToggle(row.device)}
+                                className={`flex items-center justify-center space-x-1 px-3 py-1.5 rounded text-xs font-bold transition-all ${
+                                  row.status === 'online'
+                                    ? 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                                }`}
+                              >
+                                <Power size={11} />
+                                <span>{row.status === 'online' ? 'Matikan' : 'Nyalakan'}</span>
+                              </button>
+                            ) : ['ac', 'projector'].includes(String(row.type).toLowerCase()) ? (
+                              <div className="flex items-center space-x-1.5">
+                                <button
+                                  onClick={() => row.deviceId && handleDummyDeviceToggle(row.deviceId, 'on')}
+                                  disabled={row.status === 'online'}
+                                  className={`px-2 py-1 rounded text-white text-xs font-bold transition-all shadow-sm active:scale-95 duration-200 ${
+                                    row.status === 'online'
+                                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                                      : 'bg-emerald-600 hover:bg-emerald-700 hover:shadow-md'
+                                  }`}
+                                >
+                                  ON
+                                </button>
+                                <button
+                                  onClick={() => row.deviceId && handleDummyDeviceToggle(row.deviceId, 'off')}
+                                  disabled={row.status !== 'online'}
+                                  className={`px-2 py-1 rounded text-white text-xs font-bold transition-all shadow-sm active:scale-95 duration-200 ${
+                                    row.status !== 'online'
+                                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                                      : 'bg-red-600 hover:bg-red-700 hover:shadow-md'
+                                  }`}
+                                >
+                                  OFF
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center space-x-1.5">
+                                <button
+                                  onClick={() => row.location && handleLiveClassControl(row.location, 'on')}
+                                  disabled={row.location ? classControlLoading[row.location] : false}
+                                  className="px-2.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all disabled:opacity-50"
+                                >
+                                  ON
+                                </button>
+                                <button
+                                  onClick={() => row.location && handleLiveClassControl(row.location, 'off')}
+                                  disabled={row.location ? classControlLoading[row.location] : false}
+                                  className="px-2.5 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all disabled:opacity-50"
+                                >
+                                  OFF
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+                  <button
+                    onClick={() => setControlModalOpen(false)}
+                    className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition-all"
+                  >
+                    Tutup Panel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         </main>
       </div>
@@ -859,5 +1006,62 @@ function FacultyCard({ faculty: f, loading }: { faculty: FacultyCard; loading: b
         </div>
       )}
     </div>
+  )
+}
+
+function CampusCard({ campus: c, isSelected, onClick }: { campus: any; isSelected: boolean; onClick: () => void }) {
+  const isSoon = c.mode === 'soon'
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left rounded-xl p-5 shadow-sm bg-white border transition-all duration-300 relative overflow-hidden ${
+        isSelected 
+          ? 'ring-2 ring-[#0f2d59] border-transparent shadow-md transform scale-[1.02]' 
+          : 'border-slate-200 hover:shadow-md hover:border-slate-300'
+      } border-t-4`}
+      style={{ borderTopColor: c.accentColor }}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-3xl filter">{c.icon}</span>
+        <span className={`px-2.5 py-1 rounded text-[10px] font-bold tracking-wider border ${
+          !isSoon 
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+            : 'bg-slate-100 text-slate-500 border-slate-200'
+        }`}>
+          {!isSoon ? 'TERKONEKSI' : 'SEGERA'}
+        </span>
+      </div>
+      
+      <h3 className="text-slate-800 font-extrabold text-base mb-1.5 leading-tight">{c.name}</h3>
+      
+      {isSoon ? (
+        <div className="mt-3">
+          <p className="text-slate-400 text-xs font-semibold tracking-wider">INTEGRASI TAHAP II</p>
+          <div className="mt-4 w-full py-2 bg-slate-50 border border-slate-200 text-slate-400 rounded text-center text-xs font-bold">
+            Hubungkan Kampus
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="space-y-2 mt-3 text-xs text-slate-500">
+            <div className="flex justify-between border-b border-slate-100 pb-1.5">
+              <span>Total Daya Aktif</span>
+              <span className="text-slate-900 font-extrabold">{c.totalPower.toFixed(2)} kW</span>
+            </div>
+            <div className="flex justify-between border-b border-slate-100 pb-1.5">
+              <span>Rasio Perangkat Aktif</span>
+              <span className="text-slate-800 font-semibold">{c.activeDevices} / {c.deviceCount} Alat</span>
+            </div>
+            <div className="flex justify-between pb-0.5">
+              <span>Jumlah Ruang Kelas</span>
+              <span className="text-slate-800 font-semibold">{c.rooms} Ruangan</span>
+            </div>
+          </div>
+          <div className="mt-4 w-full flex items-center justify-center space-x-1 py-2 bg-[#0f2d59]/5 hover:bg-[#0f2d59]/10 text-[#0f2d59] rounded text-center text-xs font-bold transition-all">
+            <span>{isSelected ? 'Tutup Detail ↑' : 'Buka Detail ↓'}</span>
+          </div>
+        </div>
+      )}
+    </button>
   )
 }

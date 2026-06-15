@@ -337,26 +337,27 @@ export default function DevicesPage() {
           </div>
 
           <div className="p-8">
-          {visibleClassCodes.length > 0 && (
-            <div className="mb-6 rounded-xl bg-white p-6 shadow-md">
-              <h3 className="mb-4 text-lg font-semibold text-gray-900">Kontrol ON/OFF Per Kelas</h3>
+          {/* Room Controls (Only visible when "All" is selected) */}
+          {selectedClass === 'All' && visibleClassCodes.length > 0 && (
+            <div className="mb-6 rounded-xl bg-white p-6 shadow-md border border-slate-200">
+              <h3 className="mb-4 text-sm font-bold text-slate-800 uppercase tracking-wider">Kontrol Saklar ON/OFF Per Ruangan</h3>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {visibleClassCodes.map((classCode) => (
-                  <div key={classCode} className="rounded-lg border border-gray-200 p-4">
-                    <p className="text-sm font-semibold text-gray-900">{classCode}</p>
-                    <p className="mt-1 text-xs text-gray-500">Perintah berlaku untuk semua perangkat di kelas ini.</p>
+                  <div key={classCode} className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 hover:border-slate-300 transition-all">
+                    <p className="text-sm font-bold text-slate-900">{classCode}</p>
+                    <p className="mt-1 text-xs text-slate-400">Saklar cepat untuk seluruh AC & Lampu di ruangan ini.</p>
                     <div className="mt-4 grid grid-cols-2 gap-2">
                       <button
                         onClick={() => handleClassControl(classCode, 'on')}
                         disabled={Boolean(classControlLoading[classCode])}
-                        className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60 transition-all active:scale-95"
                       >
                         {classControlLoading[classCode] === 'on' ? 'Mengirim...' : 'ON'}
                       </button>
                       <button
                         onClick={() => handleClassControl(classCode, 'off')}
                         disabled={Boolean(classControlLoading[classCode])}
-                        className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 transition-all active:scale-95"
                       >
                         {classControlLoading[classCode] === 'off' ? 'Mengirim...' : 'OFF'}
                       </button>
@@ -367,48 +368,91 @@ export default function DevicesPage() {
             </div>
           )}
 
+          {/* Device Detailed List */}
           <div className="grid grid-cols-1 gap-6">
-            {filteredDevices.length > 0 ? (
-              filteredDevices.map((device) => (
-                <div key={device.id} className="bg-white rounded-xl shadow-md p-6">
-                  <div className="grid grid-cols-1 gap-6">
-                    <div>
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <p className="text-sm text-gray-500">{device.location}</p>
-                          <h3 className="text-lg font-bold text-gray-900 mt-1">{device.device_name}</h3>
-                          <p className="text-xs text-gray-400 font-mono mt-1">{device.device_eui}</p>
+            {selectedClass === 'All' ? (
+              // Placeholder when "All" is active
+              <div className="text-center py-16 bg-white rounded-xl shadow-md border border-slate-200 p-8">
+                <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center mb-3 text-slate-400">
+                  <Activity size={24} />
+                </div>
+                <h4 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Pilih Ruangan Untuk Detail Perangkat</h4>
+                <p className="text-xs text-slate-400 mt-2 max-w-md mx-auto">
+                  Silakan pilih ruangan tertentu melalui filter pilihan ruangan di pojok kanan atas untuk melihat status sensor, telemetri daya, suhu, dan kendali detail per alat.
+                </p>
+              </div>
+            ) : filteredDevices.length > 0 ? (
+              // Show class-specific details along with a single class control
+              <>
+                {/* Classroom single quick control above details */}
+                <div className="mb-1 rounded-xl bg-white p-4 shadow-md border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Kontrol Cepat Ruang {selectedClass}</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Nyalakan/matikan seluruh saklar di ruangan ini sekaligus</p>
+                  </div>
+                  <div className="flex space-x-2 w-full sm:w-auto">
+                    <button
+                      onClick={() => handleClassControl(selectedClass, 'on')}
+                      disabled={Boolean(classControlLoading[selectedClass])}
+                      className="flex-1 sm:flex-none rounded-lg bg-green-600 px-4 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:opacity-60 transition-all active:scale-95"
+                    >
+                      {classControlLoading[selectedClass] === 'on' ? 'Mengirim...' : 'ON'}
+                    </button>
+                    <button
+                      onClick={() => handleClassControl(selectedClass, 'off')}
+                      disabled={Boolean(classControlLoading[selectedClass])}
+                      className="flex-1 sm:flex-none rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-60 transition-all active:scale-95"
+                    >
+                      {classControlLoading[selectedClass] === 'off' ? 'Mengirim...' : 'OFF'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredDevices.map((device) => (
+                    <div key={device.id} className="bg-white rounded-xl shadow-md p-6 border border-slate-200 flex flex-col justify-between hover:shadow-lg transition-all duration-300">
+                      <div>
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">{device.location}</p>
+                            <h3 className="text-base font-extrabold text-slate-800 mt-1 leading-snug">{device.device_name}</h3>
+                            <p className="text-[10px] text-slate-400 font-mono mt-1">{device.device_eui}</p>
+                          </div>
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            isDeviceOnline(device) 
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-100' 
+                              : 'bg-slate-100 text-slate-500 border border-slate-200'
+                          }`}>
+                            {isDeviceOnline(device) ? '● Online' : '○ Offline'}
+                          </span>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${isDeviceOnline(device) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                          {isDeviceOnline(device) ? '● Online' : '○ Offline'}
-                        </span>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Daya</span>
-                          <span className="font-semibold">{(parseFloat(String(device.current_power)) || 0).toFixed(2)} kW</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Suhu</span>
-                          <span className="font-semibold">{(parseFloat(String(device.current_temperature)) || 0).toFixed(1)}°C</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Tipe</span>
-                          <span className="font-semibold text-blue-600">{device.device_type}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Aplikasi</span>
-                          <span className="font-semibold text-green-600">{device.application_type}</span>
+                        <div className="space-y-2 text-xs text-slate-500 border-t border-slate-100 pt-3">
+                          <div className="flex justify-between border-b border-slate-55 pb-1.5">
+                            <span>Daya Berjalan</span>
+                            <span className="font-bold text-slate-800">{(parseFloat(String(device.current_power)) || 0).toFixed(2)} kW</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-55 pb-1.5">
+                            <span>Suhu Terukur</span>
+                            <span className="font-bold text-slate-800">{(parseFloat(String(device.current_temperature)) || 0).toFixed(1)}°C</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-55 pb-1.5">
+                            <span>Tipe Beban</span>
+                            <span className="font-bold text-blue-600">{device.device_type}</span>
+                          </div>
+                          <div className="flex justify-between pb-0.5">
+                            <span>Aplikasi Node</span>
+                            <span className="font-bold text-teal-600">{device.application_type}</span>
+                          </div>
                         </div>
                       </div>
 
                       {['ac', 'projector'].includes(String(device.device_type).toLowerCase()) && (
                         <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
                           <div className="flex items-center space-x-1">
-                            <span className="text-xs font-extrabold text-[#0f2d59] uppercase tracking-wider">Kendali:</span>
-                            <span className="text-[10px] text-slate-400 font-semibold font-mono">#{device.id}</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kendali Node:</span>
+                            <span className="text-[9px] text-slate-400 font-mono">#{device.id}</span>
                           </div>
-                          <div className="flex space-x-2">
+                          <div className="flex space-x-1.5">
                             <button
                               onClick={() => handleDummyControl(device.id, 'on')}
                               disabled={isDeviceOnline(device)}
@@ -435,9 +479,9 @@ export default function DevicesPage() {
                         </div>
                       )}
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))
+              </>
             ) : (
               <div className="text-center py-12">
                 <p className="text-gray-600">Tidak ada perangkat ditemukan</p>

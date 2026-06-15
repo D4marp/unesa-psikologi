@@ -1,14 +1,14 @@
 'use client'
 
 import { 
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
+  BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
   ResponsiveContainer
 } from 'recharts'
 import { 
   Zap, Settings, LogOut, Menu, 
-  Gauge, Activity, Clock, Building2
+  Activity, Clock, Building2, Power, RefreshCw
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { devicesAPI, consumptionAPI } from '@/lib/apiClient'
@@ -26,21 +26,44 @@ interface Device {
   current_temperature: number
   iot_status: string
   status?: string
+  power_rating?: number
 }
 
 interface ChartDataPoint {
-  time?: string
-  month?: string
+  time: string
   ac: number
   lamp: number
-  sensorTemp?: number
-  sensorHumidity?: number
 }
 
 function isDeviceOnline(device: Device): boolean {
   const iot = String(device.iot_status || '').toLowerCase()
   const status = String(device.status || '').toLowerCase()
   return iot === 'online' || iot === 'active' || status === 'active' || status === 'idle'
+}
+
+// Custom Tooltip for Recharts
+const CustomTooltip = ({ active, payload, label, unit = 'kW' }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900/95 border border-slate-800 p-3.5 rounded-lg shadow-xl text-white">
+        <p className="text-xs font-bold text-amber-400 mb-2 tracking-wider uppercase">{label}</p>
+        <div className="space-y-1.5 text-xs font-semibold">
+          {payload.map((pld: any) => (
+            <div key={pld.name} className="flex items-center justify-between gap-6">
+              <span className="flex items-center gap-1.5 text-slate-350">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: pld.color || pld.stroke }} />
+                {pld.name}
+              </span>
+              <span className="font-mono text-white text-right font-bold">
+                {Number(pld.value).toFixed(2)} {unit}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  return null
 }
 
 export default function Dashboard() {
@@ -50,9 +73,14 @@ export default function Dashboard() {
   const [selectedClass, setSelectedClass] = useState('All')
   const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Real aggregated energy states
   const [energyData, setEnergyData] = useState<ChartDataPoint[]>([])
-  const [monthlyData, setMonthlyData] = useState<ChartDataPoint[]>([])
+  const [totalConsumption, setTotalConsumption] = useState(0)
+  const [consumptionChange, setConsumptionChange] = useState(0)
+  
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [now, setNow] = useState(new Date())
 
@@ -63,176 +91,343 @@ export default function Dashboard() {
   }, [])
 
   // Extract unique classes from devices
-  const [classes, setClasses] = useState(['All'])
+  const classes = useMemo(() => {
+    if (!devices || devices.length === 0) return ['All']
+    const unique = Array.from(new Set(devices.map((d) => d.location)))
+    return ['All', ...unique]
+  }, [devices])
 
-  // Load devices and consumption data from backend
+  // Load devices list from backend
+  const loadDevices = async (showRefreshIndicator = false) => {
+    try {
+      if (showRefreshIndicator) setRefreshing(true)
+      else setLoading(true)
+      
+      const devicesData = await devicesAPI.getAll()
+      setDevices(devicesData || [])
+      setError(null)
+    } catch (err) {
+      console.error('Error loading devices:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load devices')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
+
   useEffect(() => {
-    const loadDashboardData = async () => {
+    loadDevices()
+  }, [])
+
+  // Fetch and aggregate consumption data based on selected range and class
+  useEffect(() => {
+    const loadConsumptionData = async () => {
+      if (!devices || devices.length === 0) return
+      
       try {
-        setLoading(true)
+        // Define day offsets based on timeRange
+        const rangeDays = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : 30
+        const totalDaysToFetch = rangeDays * 2 // we fetch double the range to calculate comparison
         
-        // Fetch all devices from backend
-        const devicesData = await devicesAPI.getAll()
-        setDevices(devicesData || [])
+        const today = new Date()
+        const startDate = new Date()
+        startDate.setDate(today.getDate() - (totalDaysToFetch - 1))
         
-        // Extract unique locations (classes)
-        if (devicesData && devicesData.length > 0) {
-          const uniqueClasses = ['All', ...new Set(devicesData.map((d: Device) => d.location))]
-          setClasses(uniqueClasses)
+        const startDateStr = startDate.toISOString().split('T')[0]
+        const todayStr = today.toISOString().split('T')[0]
+        
+        // Fetch raw data
+        let rawData: any[] = []
+        if (selectedClass === 'All') {
+          const classIds = [...new Set(devices.map((item) => item.class_id))]
+          const perClassData = await Promise.all(
+            classIds.map((id) => consumptionAPI.getByClass(id, startDateStr, todayStr).catch(() => []))
+          )
+          rawData = perClassData.flat()
+        } else {
+          const classId = devices.find((item) => item.location === selectedClass)?.class_id
+          if (classId) {
+            rawData = await consumptionAPI.getByClass(classId, startDateStr, todayStr)
+          }
         }
         
-        setMonthlyData(buildMonthlyTypeSeries([], 6))
+        // Generate list of dates for current and previous periods
+        const allDates: string[] = []
+        for (let i = totalDaysToFetch - 1; i >= 0; i--) {
+          const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)
+          allDates.push(d.toISOString().split('T')[0])
+        }
         
-        setError(null)
+        const previousPeriodDates = allDates.slice(0, rangeDays)
+        const currentPeriodDates = allDates.slice(rangeDays)
+        
+        let currentAcTotal = 0
+        let currentLampTotal = 0
+        let previousAcTotal = 0
+        let previousLampTotal = 0
+        
+        if (timeRange === '24h') {
+          // Current period: todayStr, previous period: yesterdayStr
+          const todayStrLocal = currentPeriodDates[0]
+          const yesterdayStrLocal = previousPeriodDates[0]
+          
+          // Initialize hourly map (00:00 to 23:00)
+          const hourlyChartMap = new Map<string, { time: string; ac: number; lamp: number }>()
+          for (let h = 0; h < 24; h += 2) { // display points every 2 hours to keep chart clean
+            const label = `${String(h).padStart(2, '0')}:00`
+            hourlyChartMap.set(label, { time: label, ac: 0, lamp: 0 })
+          }
+          
+          rawData.forEach((row: any) => {
+            const rowDate = row.consumption_date ? row.consumption_date.split('T')[0] : ''
+            const hourInt = row.hour_start ? parseInt(row.hour_start.split(':')[0], 10) : 0
+            const roundedHour = Math.floor(hourInt / 2) * 2
+            const hourStr = `${String(roundedHour).padStart(2, '0')}:00`
+            
+            const acVal = Number(row.power_ac ?? (row.device_type === 'AC' ? row.consumption : 0)) || 0
+            const lampVal = Number(row.power_lamp ?? (row.device_type === 'LAMP' ? row.consumption : 0)) || 0
+            
+            if (rowDate === todayStrLocal) {
+              currentAcTotal += acVal
+              currentLampTotal += lampVal
+              
+              const entry = hourlyChartMap.get(hourStr) || { time: hourStr, ac: 0, lamp: 0 }
+              entry.ac += acVal
+              entry.lamp += lampVal
+              hourlyChartMap.set(hourStr, entry)
+            } else if (rowDate === yesterdayStrLocal) {
+              previousAcTotal += acVal
+              previousLampTotal += lampVal
+            }
+          })
+          
+          const currentSum = currentAcTotal + currentLampTotal
+          const prevSum = previousAcTotal + previousLampTotal
+          
+          setTotalConsumption(currentSum)
+          const change = prevSum > 0 ? ((currentSum - prevSum) / prevSum) * 100 : 0
+          setConsumptionChange(change)
+          
+          setEnergyData([...hourlyChartMap.values()].map(item => ({
+            time: item.time,
+            ac: Math.round(item.ac * 100) / 100,
+            lamp: Math.round(item.lamp * 100) / 100
+          })))
+        } else {
+          // Daily charts for 7d and 30d
+          const dailyChartMap = new Map<string, { time: string; ac: number; lamp: number }>()
+          currentPeriodDates.forEach(date => {
+            const label = new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+            dailyChartMap.set(date, { time: label, ac: 0, lamp: 0 })
+          })
+          
+          rawData.forEach((row: any) => {
+            const rowDate = row.consumption_date ? row.consumption_date.split('T')[0] : ''
+            const acVal = Number(row.power_ac ?? (row.device_type === 'AC' ? row.consumption : 0)) || 0
+            const lampVal = Number(row.power_lamp ?? (row.device_type === 'LAMP' ? row.consumption : 0)) || 0
+            
+            if (currentPeriodDates.includes(rowDate)) {
+              currentAcTotal += acVal
+              currentLampTotal += lampVal
+              
+              const entry = dailyChartMap.get(rowDate) || { time: rowDate, ac: 0, lamp: 0 }
+              entry.ac += acVal
+              entry.lamp += lampVal
+              dailyChartMap.set(rowDate, entry)
+            } else if (previousPeriodDates.includes(rowDate)) {
+              previousAcTotal += acVal
+              previousLampTotal += lampVal
+            }
+          })
+          
+          const currentSum = currentAcTotal + currentLampTotal
+          const prevSum = previousAcTotal + previousLampTotal
+          
+          setTotalConsumption(currentSum)
+          const change = prevSum > 0 ? ((currentSum - prevSum) / prevSum) * 100 : 0
+          setConsumptionChange(change)
+          
+          setEnergyData([...dailyChartMap.values()].map(item => ({
+            time: item.time,
+            ac: Math.round(item.ac * 100) / 100,
+            lamp: Math.round(item.lamp * 100) / 100
+          })))
+        }
       } catch (err) {
-        console.error('Error loading dashboard data:', err)
-        setError(err instanceof Error ? err.message : 'Failed to load data')
-        // Show mock data on error
-        setDevices([])
-        setClasses(['All'])
-        setEnergyData(generateMockCharData())
-        setMonthlyData(buildMonthlyTypeSeries([], 6))
-      } finally {
-        setLoading(false)
+        console.error('Error loading consumption data:', err)
+      }
+    }
+    
+    loadConsumptionData()
+  }, [devices, selectedClass, timeRange])
+
+  // Filter devices by selected class
+  const filteredDevices = useMemo(() => {
+    return selectedClass === 'All' 
+      ? devices 
+      : devices.filter(d => d.location === selectedClass)
+  }, [devices, selectedClass])
+
+  // Calculate live current statistics based on device status
+  const currentStats = useMemo(() => {
+    const acDevices = filteredDevices.filter(d => d.device_type === 'AC')
+    const lampDevices = filteredDevices.filter(d => d.device_type === 'LAMP')
+    const sensorDevices = filteredDevices.filter(d => d.device_type === 'SENSOR')
+    
+    // Live power (kW) calculation - fallback to power rating if active but current_power is 0
+    const liveAcPower = acDevices.reduce((sum, d) => {
+      const active = d.status === 'active' || d.status === 'online'
+      if (!active) return sum
+      const power = parseFloat(String(d.current_power)) || 0
+      return sum + (power > 0 ? power : (parseFloat(String(d.power_rating)) || 3.0))
+    }, 0)
+
+    const liveLampPower = lampDevices.reduce((sum, d) => {
+      const active = d.status === 'active' || d.status === 'online'
+      if (!active) return sum
+      const power = parseFloat(String(d.current_power)) || 0
+      return sum + (power > 0 ? power : (parseFloat(String(d.power_rating)) || 1.6))
+    }, 0)
+
+    // Suhu AC rata-rata
+    const activeAcTemps = acDevices
+      .filter(d => (d.status === 'active' || d.status === 'online') && d.current_temperature)
+      .map(d => parseFloat(String(d.current_temperature)))
+    
+    const avgAcTemp = activeAcTemps.length > 0
+      ? (activeAcTemps.reduce((s, t) => s + t, 0) / activeAcTemps.length).toFixed(1)
+      : '24.0'
+
+    // Ambient Sensor rata-rata (VS321)
+    const activeSensorTemps = sensorDevices
+      .filter(d => d.current_temperature && parseFloat(String(d.current_temperature)) > 0)
+      .map(d => parseFloat(String(d.current_temperature)))
+    
+    const avgSensorTemp = activeSensorTemps.length > 0
+      ? (activeSensorTemps.reduce((s, t) => s + t, 0) / activeSensorTemps.length).toFixed(1)
+      : '27.5'
+
+    // Extract humidity from latest reading lists
+    let latestHumidity = 78.5
+    for (const sensor of sensorDevices) {
+      const consumptionList = (sensor as any).consumption || []
+      if (consumptionList.length > 0) {
+        const validRecords = consumptionList.filter((c: any) => c.humidity !== null && c.humidity !== undefined)
+        if (validRecords.length > 0) {
+          latestHumidity = parseFloat(validRecords[validRecords.length - 1].humidity)
+          break
+        }
       }
     }
 
-    loadDashboardData()
-  }, [])
+    const onlineDevicesCount = filteredDevices.filter(d => isDeviceOnline(d)).length
 
+    return {
+      liveAcPower,
+      liveLampPower,
+      avgAcTemp,
+      avgSensorTemp,
+      latestHumidity,
+      onlineDevicesCount,
+      sensorCount: sensorDevices.length
+    }
+  }, [filteredDevices])
+
+  // Handles device control (turn ON/OFF)
+  const handleDeviceControl = async (deviceId: number, currentStatus: string) => {
+    const action = currentStatus === 'active' || currentStatus === 'online' ? 'off' : 'on'
+    try {
+      setRefreshing(true)
+      await devicesAPI.control(deviceId, action)
+      // Reload devices to catch new state
+      await loadDevices(true)
+    } catch (err) {
+      console.error('Failed to control device:', err)
+      alert(err instanceof Error ? err.message : 'Gagal mengontrol perangkat')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  // Handles classroom control (turn all ON/OFF)
+  const handleClassroomControl = async (location: string, action: 'on' | 'off') => {
+    try {
+      setRefreshing(true)
+      await devicesAPI.controlByClass(location, action)
+      // Reload devices to catch new state
+      await loadDevices(true)
+    } catch (err) {
+      console.error('Failed to control class devices:', err)
+      alert(err instanceof Error ? err.message : 'Gagal mengontrol ruangan')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  // Monthly trend summary data (always 6 months)
+  const [monthlyTrendData, setMonthlyTrendData] = useState<any[]>([])
   useEffect(() => {
-    const loadMonthlyTrend = async () => {
+    const fetchMonthlyTrend = async () => {
       try {
-        if (!devices || devices.length === 0) {
-          setMonthlyData(buildMonthlyTypeSeries([], 6))
-          return
-        }
-
         const classId = selectedClass === 'All'
           ? undefined
           : devices.find((d) => d.location === selectedClass)?.class_id
 
         const summary = await consumptionAPI.getMonthlyTrendSummary(6, classId)
-        setMonthlyData(buildMonthlyTypeSeries(summary || [], 6))
+        
+        // Format to Indonesian month labels
+        const monthNamesMap: Record<string, string> = {
+          'Jan': 'Jan', 'Feb': 'Feb', 'Mar': 'Mar', 'Apr': 'Apr', 'May': 'Mei', 'Jun': 'Jun',
+          'Jul': 'Jul', 'Aug': 'Ags', 'Sep': 'Sep', 'Oct': 'Okt', 'Nov': 'Nov', 'Dec': 'Des'
+        }
+
+        const formatted = (summary || []).map((row: any) => {
+          const [yearStr, monthStr] = String(row.month_key).split('-')
+          const monthIndex = parseInt(monthStr, 10) - 1
+          const monthLabel = new Date(parseInt(yearStr, 10), monthIndex, 1).toLocaleString('en-US', { month: 'short' })
+          return {
+            month: monthNamesMap[monthLabel] || monthLabel,
+            ac: parseFloat(row.ac_total) || 0,
+            lamp: parseFloat(row.lamp_total) || 0,
+            sensorTemp: parseFloat(row.avg_temperature) || 0,
+            sensorHumidity: parseFloat(row.avg_humidity) || 0,
+          }
+        })
+        setMonthlyTrendData(formatted)
       } catch (e) {
-        console.warn('Could not load monthly trend summary:', e)
-        setMonthlyData(buildMonthlyTypeSeries([], 6))
+        console.warn('Could not load monthly trend:', e)
       }
     }
-
-    loadMonthlyTrend()
+    fetchMonthlyTrend()
   }, [devices, selectedClass])
-
-  useEffect(() => {
-    const loadHourlyTrend = async () => {
-      try {
-        if (!devices || devices.length === 0) {
-          setEnergyData(generateMockCharData())
-          return
-        }
-
-        const today = new Date().toISOString().split('T')[0]
-
-        if (selectedClass === 'All') {
-          const classIds = [...new Set(devices.map((item) => item.class_id))]
-          const perClassHourly = await Promise.all(
-            classIds.map((id) => consumptionAPI.getHourlyAggregatedByClass(id, today).catch(() => []))
-          )
-          setEnergyData(mergeHourlySeries(perClassHourly as any[][]))
-          return
-        }
-
-        const classId = devices.find((item) => item.location === selectedClass)?.class_id
-        if (!classId) {
-          setEnergyData(generateMockCharData())
-          return
-        }
-
-        const hourly = await consumptionAPI.getHourlyAggregatedByClass(classId, today)
-        setEnergyData((hourly || []).map((item: any) => ({
-          time: item.time || item.hour_start || '00:00',
-          ac: Number(item.ac ?? item.ac_total ?? 0),
-          lamp: Number(item.lamp ?? item.lamp_total ?? 0),
-          sensorTemp: Number(item.sensorTemp ?? item.avg_temperature ?? 0),
-          sensorHumidity: Number(item.sensorHumidity ?? item.avg_humidity ?? 0),
-        })))
-      } catch (e) {
-        console.warn('Could not load hourly consumption summary:', e)
-        setEnergyData(generateMockCharData())
-      }
-    }
-
-    loadHourlyTrend()
-  }, [devices, selectedClass])
-
-  // Filter devices by selected class
-  const filteredDevices = selectedClass === 'All' 
-    ? devices 
-    : devices.filter(d => d.location === selectedClass)
-
-  // Calculate KPI values
-  const deviceTotalPower = filteredDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0)
-  const acDevices = filteredDevices.filter(d => d.device_type === 'AC')
-  const lampDevices = filteredDevices.filter(d => d.device_type === 'LAMP')
-  const sensorDevices = filteredDevices.filter(d => d.device_type === 'SENSOR')
-  
-  const deviceAcPower = acDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0)
-  const deviceLampPower = lampDevices.reduce((sum, d) => sum + (parseFloat(String(d.current_power)) || 0), 0)
-
-  // Use only valid AC temperature readings; fallback to default 24°C when real data is unavailable.
-  const validAcTemps = acDevices
-    .map((d) => parseFloat(String(d.current_temperature)))
-    .filter((temp) => Number.isFinite(temp) && temp > 0)
-
-  const avgAcTemp = validAcTemps.length > 0
-    ? (validAcTemps.reduce((sum, temp) => sum + temp, 0) / validAcTemps.length).toFixed(1)
-    : '24.0'
-
-  const latestHourlyPoint = energyData.length > 0 ? energyData[energyData.length - 1] : null
-  const latestMonthlyPoint = monthlyData.length > 0 ? monthlyData[monthlyData.length - 1] : null
-  const latestSensorPoint = latestHourlyPoint || latestMonthlyPoint
-
-  const currentAcPower = latestHourlyPoint && latestHourlyPoint.ac > 0
-    ? latestHourlyPoint.ac
-    : deviceAcPower
-
-  const currentLampPower = latestHourlyPoint && latestHourlyPoint.lamp > 0
-    ? latestHourlyPoint.lamp
-    : deviceLampPower
-
-  const totalPower = (latestHourlyPoint && (latestHourlyPoint.ac > 0 || latestHourlyPoint.lamp > 0)
-    ? currentAcPower + currentLampPower
-    : deviceTotalPower).toFixed(2)
-
-  const avgSensorTemp = latestSensorPoint?.sensorTemp && latestSensorPoint.sensorTemp > 0
-    ? latestSensorPoint.sensorTemp.toFixed(1)
-    : '0'
-
-  const latestSensorHumidity = latestSensorPoint?.sensorHumidity && latestSensorPoint.sensorHumidity > 0
-    ? latestSensorPoint.sensorHumidity
-    : 0
 
   if (loading) {
     return (
-      <div className="flex h-screen bg-gray-50 items-center justify-center">
+      <div className="flex h-screen bg-[#0f2d59] items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Memuat data...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#d8ae47] mx-auto mb-6"></div>
+          <p className="text-white font-bold tracking-wider animate-pulse">MEMUAT DASHBOARD ENERGI...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex h-screen bg-gray-50" style={{
-      backgroundImage: 'url(/assets/bg_image.png)',
+    <div className="flex h-screen overflow-hidden text-slate-800" style={{
+      backgroundImage: 'url(/bg_unesa2.png)',
       backgroundSize: 'cover',
       backgroundPosition: 'center',
-      backgroundAttachment: 'fixed'
+      backgroundAttachment: 'fixed',
+      fontFamily: "'Plus Jakarta Sans', sans-serif"
     }}>
       {/* Semi-transparent overlay */}
-      <div className="absolute inset-0 bg-white/40 pointer-events-none"></div>
-      
+      <div className="absolute inset-0 bg-white/40 pointer-events-none z-0" />
+
+      {/* Google Fonts Link */}
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
       {/* Sidebar */}
       <aside
         className={`${
@@ -315,14 +510,9 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto relative z-10">
-        {error && (
-          <div className="mx-8 mt-6 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-yellow-800 shadow-sm">
-            Data API belum tersedia. Dashboard tetap dibuka dengan data kosong/mock sementara.
-          </div>
-        )}
-
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10">
+        
         {/* Header */}
         <header className="bg-[#0f2d59] text-white shadow-md border-b-4 border-[#d8ae47] z-10 shrink-0">
           <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
@@ -351,7 +541,17 @@ export default function Dashboard() {
                 <p className="text-slate-300 text-xs mt-0.5">{now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
               </div>
 
-              {/* User Profile Dropdown */}
+              {/* Refresh Button */}
+              <button 
+                onClick={() => loadDevices(true)}
+                disabled={refreshing}
+                className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#d8ae47]/30 rounded-lg text-[#d8ae47] transition-all disabled:opacity-50"
+                title="Refresh Data"
+              >
+                <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+              </button>
+
+              {/* User Profile */}
               <div className="relative">
                 <button
                   onClick={() => setProfileMenuOpen(!profileMenuOpen)}
@@ -366,7 +566,6 @@ export default function Dashboard() {
                   </div>
                 </button>
 
-                {/* Dropdown Menu */}
                 {profileMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-30" onClick={() => setProfileMenuOpen(false)} />
@@ -405,23 +604,41 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Content */}
-        <div className="p-8">
+        {/* Scrollable Dashboard Body */}
+        <main className="flex-1 overflow-y-auto p-8 max-w-[1600px] w-full mx-auto space-y-6">
           
-          {/* Filters & Dynamic Statistics Card */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-red-800 text-sm flex items-center space-x-3 shadow-sm">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
+              <span>{error}. Menggunakan data cache lokal sementara.</span>
+            </div>
+          )}
+
+          {/* Filters & Total Consumption Card */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-6 relative overflow-hidden">
             <div className="flex items-center space-x-4">
-              <div className="p-3 bg-blue-50 text-[#0f2d59] rounded-lg">
+              <div className="p-3 bg-teal-50 text-teal-700 rounded-lg">
                 <Zap size={24} />
               </div>
               <div>
                 <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Konsumsi Fakultas Psikologi</p>
-                <h3 className="text-2xl font-extrabold text-[#0f2d59] mt-0.5">{totalPower} kW</h3>
-                <p className="text-xs text-green-600 font-semibold mt-1">↓ 8% vs kemarin</p>
+                <h3 className="text-2xl font-extrabold text-[#0f2d59] mt-0.5">
+                  {totalConsumption.toFixed(2)} <span className="text-sm font-bold text-slate-400">kWh</span>
+                </h3>
+                <span className={`text-xs font-bold inline-flex items-center px-2 py-0.5 rounded-full mt-1.5 ${
+                  consumptionChange <= 0 
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-100' 
+                    : 'bg-rose-50 text-rose-800 border border-rose-100'
+                }`}>
+                  {consumptionChange <= 0 ? '↓' : '↑'} {Math.abs(consumptionChange).toFixed(1)}% vs {
+                    timeRange === '24h' ? 'kemarin' : timeRange === '7d' ? '7d sebelumnya' : '30d sebelumnya'
+                  }
+                </span>
               </div>
             </div>
             
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-1 justify-end">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 xl:justify-end">
+              {/* Select Classroom */}
               <div className="flex items-center space-x-2 w-full sm:w-auto">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0">Pilih Kelas:</span>
                 <div className="flex flex-wrap gap-1.5">
@@ -429,10 +646,10 @@ export default function Dashboard() {
                     <button
                       key={cls}
                       onClick={() => setSelectedClass(cls)}
-                      className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
                         selectedClass === cls
-                          ? 'bg-[#0f2d59] text-white shadow-sm'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          ? 'bg-[#0f2d59] text-white border-[#d8ae47]/30 shadow-md'
+                          : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
                       }`}
                     >
                       {cls}
@@ -440,338 +657,270 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-              
-              <div className="flex space-x-1 bg-slate-100 p-1 rounded border border-slate-200">
-                {['24h', '7d', '30d'].map((range) => (
-                  <button
-                    key={range}
-                    onClick={() => setTimeRange(range)}
-                    className={`px-3 py-1 rounded text-xs font-bold transition-all ${
-                      timeRange === range
-                        ? 'bg-[#0f2d59] text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {range}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+
+          {/* KPI Statistics Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <KPICard
-              title="AC - Daya Saat Ini"
-              value={`${currentAcPower.toFixed(2)} kW`}
-              change="+5%"
+              title="AC — Daya Saat Ini"
+              value={`${currentStats.liveAcPower.toFixed(2)} kW`}
+              change="Beban Berjalan"
               icon={<Zap className="text-orange-500" size={20} />}
               bgColor="bg-orange-50"
             />
             <KPICard
-              title="Lampu - Daya Saat Ini"
-              value={`${currentLampPower.toFixed(2)} kW`}
-              change="+3%"
-              icon={<Zap className="text-blue-500" size={20} />}
-              bgColor="bg-blue-50"
+              title="Lampu — Daya Saat Ini"
+              value={`${currentStats.liveLampPower.toFixed(2)} kW`}
+              change="Daya Terkalkulasi"
+              icon={<Zap className="text-yellow-500" size={20} />}
+              bgColor="bg-yellow-50"
             />
             <KPICard
-              title="Suhu AC Rata-rata"
-              value={`${avgAcTemp}°C`}
-              change="+2%"
-              icon={<Gauge className="text-green-500" size={20} />}
-              bgColor="bg-green-50"
+              title="Suhu Rata-rata"
+              value={`${currentStats.avgSensorTemp} °C`}
+              change={`${currentStats.latestHumidity.toFixed(1)}% RH`}
+              icon={<Activity className="text-teal-500" size={20} />}
+              bgColor="bg-teal-50"
             />
             <KPICard
-              title="VS321 - Suhu Rata-rata"
-              value={`${avgSensorTemp}°C`}
-              change={`${latestSensorHumidity.toFixed(1)}% RH`}
-              icon={<Activity className="text-cyan-600" size={20} />}
-              bgColor="bg-cyan-50"
-            />
-            <KPICard
-              title="Total Perangkat Aktif"
-              value={`${filteredDevices.filter((d) => isDeviceOnline(d)).length}`}
-              change={`${sensorDevices.length} sensor`}
+              title="Perangkat Aktif"
+              value={`${currentStats.onlineDevicesCount} / ${filteredDevices.length}`}
+              change={`${currentStats.sensorCount} Sensor Terhubung`}
               icon={<Activity className="text-purple-500" size={20} />}
               bgColor="bg-purple-50"
             />
           </div>
 
-          {/* Advanced Analytics Row 1 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* AC & Lamp Consumption */}
-            <div className="bg-white rounded-xl card-shadow p-6 hover:shadow-xl smooth-transition">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Konsumsi Daya AC & Lampu</h3>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={energyData.length > 0 ? energyData : generateMockCharData()}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="time" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Legend />
-                  <Bar dataKey="ac" fill="#d8ae47" radius={[4, 4, 0, 0]} name="Daya AC (kW)" />
-                  <Bar dataKey="lamp" fill="#483688" radius={[4, 4, 0, 0]} name="Daya Lampu (kW)" />
-                </BarChart>
-              </ResponsiveContainer>
+          {/* Graphs Area */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Chart 1: AC & Lamp Power Usage */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col hover:shadow-md transition-all duration-300">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 tracking-wider uppercase">
+                    KONSUMSI DAYA AC & LAMPU ({timeRange === '24h' ? 'HARI INI' : timeRange === '7d' ? '7 HARI TERAKHIR' : '30 HARI TERAKHIR'})
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Grafik perbandingan beban energi sektoral</p>
+                </div>
+                
+                {/* Select Time Range */}
+                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 self-start sm:self-center">
+                  {[
+                    { key: '24h', label: 'Hari' },
+                    { key: '7d', label: 'Minggu' },
+                    { key: '30d', label: 'Bulan' }
+                  ].map((range) => (
+                    <button
+                      key={range.key}
+                      onClick={() => setTimeRange(range.key)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        timeRange === range.key
+                          ? 'bg-[#0f2d59] text-white shadow-md'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {range.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex-1 w-full min-h-[280px]">
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={energyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey="time" stroke="#475569" fontSize={11} fontWeight={600} tickLine={false} />
+                    <YAxis stroke="#475569" fontSize={11} fontWeight={600} tickLine={false} unit={timeRange === '24h' ? ' kW' : ' kWh'} />
+                    <Tooltip content={<CustomTooltip unit={timeRange === '24h' ? 'kW' : 'kWh'} />} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 10, fontWeight: 700 }} />
+                    <Bar dataKey="ac" fill="#d8ae47" radius={[4, 4, 0, 0]} name="Air Conditioner" />
+                    <Bar dataKey="lamp" fill="#483688" radius={[4, 4, 0, 0]} name="Lighting System" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
-            {/* Monthly Trend */}
-            <div className="bg-white rounded-xl card-shadow p-6 hover:shadow-xl smooth-transition">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Tren Bulanan</h3>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={monthlyData.length > 0 ? monthlyData : generateMockMonthlyData()}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Legend />
-                  <Line type="monotone" dataKey="ac" stroke="#d8ae47" strokeWidth={2} name="AC (kWh)" />
-                  <Line type="monotone" dataKey="lamp" stroke="#483688" strokeWidth={2} name="Lampu (kWh)" />
-                  <Line type="monotone" dataKey="sensorTemp" stroke="#0ea5e9" strokeWidth={2} strokeDasharray="5 3" name="VS321 Suhu (°C)" />
-                  <Line type="monotone" dataKey="sensorHumidity" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" name="VS321 Humidity (%)" />
-                </LineChart>
-              </ResponsiveContainer>
+            {/* Chart 2: Monthly Trends */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col hover:shadow-md transition-all duration-300">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-slate-800 tracking-wider uppercase">TREN BULANAN AKUMULATIF</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Akumulasi penggunaan energi 6 bulan terakhir (kWh)</p>
+              </div>
+              <div className="flex-1 w-full min-h-[280px]">
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart data={monthlyTrendData}>
+                    <defs>
+                      <linearGradient id="colorAc" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#d8ae47" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#d8ae47" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorLamp" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#483688" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#483688" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey="month" stroke="#475569" fontSize={11} fontWeight={600} tickLine={false} />
+                    <YAxis stroke="#475569" fontSize={11} fontWeight={600} tickLine={false} unit=" kWh" />
+                    <Tooltip content={<CustomTooltip unit="kWh" />} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 10, fontWeight: 700 }} />
+                    <Area type="monotone" dataKey="ac" stroke="#d8ae47" strokeWidth={2.5} fillOpacity={1} fill="url(#colorAc)" name="Total AC" />
+                    <Area type="monotone" dataKey="lamp" stroke="#483688" strokeWidth={2.5} fillOpacity={1} fill="url(#colorLamp)" name="Total Lampu" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
-          {/* Device Management */}
-          <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-6">
-            {/* AC & Lamp Devices Table */}
-            <div className="bg-white rounded-xl card-shadow p-6 hover:shadow-xl smooth-transition">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Status Perangkat AC, Lampu, dan VS321 Sensor</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Lokasi</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Perangkat</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Tipe</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Daya (kW)</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Suhu (°C)</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Device EUI</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredDevices.map((device) => (
-                      <tr key={device.id} className="border-b border-gray-100 hover:bg-gray-50 smooth-transition">
-                        <td className="py-3 px-4 font-medium text-gray-900">{device.location}</td>
-                        <td className="py-3 px-4 text-gray-600">{device.device_name}</td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+          {/* Classroom Control Cards */}
+          {selectedClass === 'All' && (
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-slate-800 tracking-wider uppercase">🕹️ KONTROL ON/OFF KELAS PSIKOLOGI</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Nyalakan/matikan seluruh perangkat ruangan dengan cepat</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+                {classes.filter(c => c !== 'All').map(loc => {
+                  const locDevices = devices.filter(d => d.location === loc)
+                  const isAnyActive = locDevices.some(d => d.status === 'active' || d.status === 'online')
+                  
+                  return (
+                    <div key={loc} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:border-purple-300 transition-all duration-300">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-bold text-slate-800 uppercase tracking-wider">{loc}</p>
+                        <span className={`inline-flex items-center w-2 h-2 rounded-full ${
+                          isAnyActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                        }`} />
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-semibold mb-4">{locDevices.length} Perangkat Terdaftar</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => handleClassroomControl(loc, 'on')}
+                          className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-all text-center"
+                        >
+                          ON
+                        </button>
+                        <button
+                          onClick={() => handleClassroomControl(loc, 'off')}
+                          className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition-all text-center"
+                        >
+                          OFF
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Live Device Status Table */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm overflow-hidden">
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-slate-800 tracking-wider uppercase">DAFTAR STATUS PERANGKAT TERKONEKSI</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Daftar live telemetri status daya dan suhu perangkat</p>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-wider">
+                    <th className="pb-3 px-4 pt-3">Lokasi</th>
+                    <th className="pb-3 px-4 pt-3">Nama Perangkat</th>
+                    <th className="pb-3 px-4 pt-3">Tipe</th>
+                    <th className="pb-3 px-4 pt-3 text-right">Daya Aktif (kW)</th>
+                    <th className="pb-3 px-4 pt-3 text-right">Suhu (°C)</th>
+                    <th className="pb-3 px-4 pt-3">Device EUI</th>
+                    <th className="pb-3 px-4 pt-3">Status</th>
+                    <th className="pb-3 px-4 pt-3 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
+                  {filteredDevices.map((device) => {
+                    const online = isDeviceOnline(device)
+                    const active = device.status === 'active' || device.status === 'online'
+                    const livePower = active
+                      ? (parseFloat(String(device.current_power)) || parseFloat(String(device.power_rating)) || 0)
+                      : 0.00
+                    
+                    return (
+                      <tr key={device.id} className="hover:bg-slate-50/50 transition-all odd:bg-white even:bg-slate-50/20">
+                        <td className="py-3.5 px-4 font-bold text-slate-900">{device.location}</td>
+                        <td className="py-3.5 px-4 text-slate-600">{device.device_name}</td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
                             device.device_type === 'AC'
-                              ? 'bg-orange-100 text-orange-700'
+                              ? 'bg-orange-50 text-orange-700 border-orange-200'
                               : device.device_type === 'LAMP'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-cyan-100 text-cyan-700'
+                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                : 'bg-cyan-50 text-cyan-700 border-cyan-200'
                           }`}>
                             {device.device_type}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-gray-900 font-semibold">{(parseFloat(String(device.current_power)) || 0).toFixed(2)} kW</td>
-                        <td className="py-3 px-4 text-gray-600">{(parseFloat(String(device.current_temperature)) || 0).toFixed(1)}°C</td>
-                        <td className="py-3 px-4 text-gray-600 text-xs font-mono">{device.device_eui}</td>
-                        <td className="py-3 px-4">
-                          {(() => {
-                            const online = isDeviceOnline(device)
-                            return (
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900">
+                          {livePower.toFixed(2)} kW
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono text-slate-600">
+                          {device.current_temperature && parseFloat(String(device.current_temperature)) > 0
+                            ? `${parseFloat(String(device.current_temperature)).toFixed(1)}°C`
+                            : '—'
+                          }
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-slate-400 text-[10px]">{device.device_eui}</td>
+                        <td className="py-3.5 px-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                             online
-                              ? 'bg-green-100 text-green-700' 
-                              : 'bg-gray-100 text-gray-700'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                              : 'bg-slate-100 text-slate-500 border-slate-200'
                           }`}>
-                            {online ? '● Online' : '○ Offline'}
+                            <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-emerald-600 animate-pulse' : 'bg-slate-400'}`} />
+                            {online ? 'Online' : 'Offline'}
                           </span>
-                            )
-                          })()}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          {device.device_type !== 'SENSOR' && (
+                            <button
+                              onClick={() => handleDeviceControl(device.id, device.status || 'offline')}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black border transition-all ${
+                                active
+                                  ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                              }`}
+                            >
+                              <Power size={11} />
+                              {active ? 'MATIKAN' : 'NYALAKAN'}
+                            </button>
+                          )}
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
-      </main>
-    </div>
-  )
-}
-
-
-
-function KPICard({
-  title,
-  value,
-  change,
-  icon,
-  bgColor,
-}: {
-  title: string
-  value: string
-  change: string
-  icon: React.ReactNode
-  bgColor: string
-}) {
-  return (
-    <div className="bg-white rounded-lg card-shadow p-4 hover:shadow-lg smooth-transition">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-gray-500 text-xs font-medium uppercase tracking-wider">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          <p className="text-xs text-green-600 font-medium mt-2">{change}</p>
-        </div>
-        <div className={`${bgColor} p-3 rounded-lg`}>{icon}</div>
+          
+        </main>
       </div>
     </div>
   )
 }
 
-// Dynamic helper functions for real-time mock data based on current date
-function generateMockCharData(): ChartDataPoint[] {
-  const data: ChartDataPoint[] = []
-  
-  for (let hour = 0; hour < 24; hour += 4) {
-    const time = String(hour).padStart(2, '0') + ':00'
-    const acBase = 15 + Math.sin((hour - 6) * Math.PI / 12) * 15 + Math.random() * 5
-    const lampBase = 8 + Math.cos((hour - 12) * Math.PI / 12) * 10 + Math.random() * 3
-    
-    data.push({
-      time,
-      ac: Math.max(5, Math.round(acBase * 100) / 100),
-      lamp: Math.max(2, Math.round(lampBase * 100) / 100),
-    })
-  }
-  
-  return data
-}
-
-function generateMockMonthlyData(): ChartDataPoint[] {
-  const now = new Date()
-  const currentMonth = now.getMonth()
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const data: ChartDataPoint[] = []
-  
-  for (let i = 5; i >= 0; i--) {
-    const monthIndex = (currentMonth - i + 12) % 12
-    const monthName = monthNames[monthIndex]
-    
-    const seasonalFactor = 1 + Math.sin((monthIndex - 5) * Math.PI / 6) * 0.3
-    const acBase = 450 * seasonalFactor + Math.random() * 100
-    const lampBase = 240 * seasonalFactor + Math.random() * 50
-    
-    data.push({
-      month: monthName,
-      ac: Math.round(acBase * 100) / 100,
-      lamp: Math.round(lampBase * 100) / 100,
-    })
-  }
-  
-  return data
-}
-
-function mergeHourlySeries(seriesList: any[][]): ChartDataPoint[] {
-  const hourMap = new Map<string, {
-    time: string
-    ac: number
-    lamp: number
-    sensorTemps: number[]
-    sensorHumiditys: number[]
-  }>()
-
-  ;(seriesList || []).forEach((series) => {
-    (series || []).forEach((item: any) => {
-      const time = item.time || item.hour_start || '00:00'
-      const existing = hourMap.get(time) || {
-        time,
-        ac: 0,
-        lamp: 0,
-        sensorTemps: [] as number[],
-        sensorHumiditys: [] as number[],
-      }
-
-      existing.ac += Number(item.ac ?? item.ac_total ?? item.total_consumption ?? 0) || 0
-      existing.lamp += Number(item.lamp ?? item.lamp_total ?? 0) || 0
-
-      const sensorTemp = Number(item.sensorTemp ?? item.avg_temperature)
-      const sensorHumidity = Number(item.sensorHumidity ?? item.avg_humidity)
-
-      if (Number.isFinite(sensorTemp) && sensorTemp > 0) {
-        existing.sensorTemps.push(sensorTemp)
-      }
-
-      if (Number.isFinite(sensorHumidity) && sensorHumidity > 0) {
-        existing.sensorHumiditys.push(sensorHumidity)
-      }
-
-      hourMap.set(time, existing)
-    })
-  })
-
-  return [...hourMap.values()]
-    .sort((left, right) => left.time.localeCompare(right.time))
-    .map((entry) => ({
-      time: entry.time,
-      ac: Math.round(entry.ac * 100) / 100,
-      lamp: Math.round(entry.lamp * 100) / 100,
-      sensorTemp: entry.sensorTemps.length > 0
-        ? entry.sensorTemps.reduce((sum, value) => sum + value, 0) / entry.sensorTemps.length
-        : 0,
-      sensorHumidity: entry.sensorHumiditys.length > 0
-        ? entry.sensorHumiditys.reduce((sum, value) => sum + value, 0) / entry.sensorHumiditys.length
-        : 0,
-    }))
-}
-
-function buildMonthlyTypeSeries(apiRows: any[], months: number = 6): ChartDataPoint[] {
-  const monthMap: Record<string, { ac: number; lamp: number; sensorTemp: number; sensorHumidity: number }> = {}
-
-  ;(apiRows || []).forEach((row: any) => {
-    if (!row?.month_key) {
-      return
-    }
-
-    const [yearStr, monthStr] = String(row.month_key).split('-')
-    const year = parseInt(yearStr, 10)
-    const monthIndex = parseInt(monthStr, 10) - 1
-    if (Number.isNaN(year) || Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
-      return
-    }
-
-    const monthLabel = new Date(year, monthIndex, 1).toLocaleString('en-US', { month: 'short' })
-    monthMap[monthLabel] = {
-      ac: parseFloat(row.ac_total) || 0,
-      lamp: parseFloat(row.lamp_total) || 0,
-      sensorTemp: parseFloat(row.avg_temperature) || 0,
-      sensorHumidity: parseFloat(row.avg_humidity) || 0,
-    }
-  })
-
-  const now = new Date()
-  const result: ChartDataPoint[] = []
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const label = d.toLocaleString('en-US', { month: 'short' })
-    result.push({
-      month: label,
-      ac: monthMap[label]?.ac || 0,
-      lamp: monthMap[label]?.lamp || 0,
-      sensorTemp: monthMap[label]?.sensorTemp || 0,
-      sensorHumidity: monthMap[label]?.sensorHumidity || 0,
-    })
-  }
-
-  return result
+function KPICard({ title, value, change, icon, bgColor }: {
+  title: string; value: string; change: string; icon: React.ReactNode; bgColor: string
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+      <div className="flex items-start justify-between">
+        <div className="space-y-2">
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">{title}</p>
+          <p className="text-2xl font-extrabold text-slate-900 leading-none">{value}</p>
+          <p className="text-xs text-slate-400 font-semibold">{change}</p>
+        </div>
+        <div className={`${bgColor} p-3 rounded-lg border border-slate-100 flex items-center justify-center`}>{icon}</div>
+      </div>
+    </div>
+  )
 }
