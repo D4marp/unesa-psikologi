@@ -64,16 +64,16 @@ interface RoomRow {
 // ─── Dummy FBS data ───────────────────────────────────────────────────────────
 
 const FBS_DEVICES: RoomRow[] = [
-  { faculty: 'FBS', room: 'BS-101', device: 'AC BS-101 Unit 1', type: 'AC', power: 2.4, status: 'online' },
-  { faculty: 'FBS', room: 'BS-101', device: 'Lampu BS-101', type: 'LAMP', power: 0.8, status: 'online' },
-  { faculty: 'FBS', room: 'BS-102', device: 'AC BS-102 Unit 1', type: 'AC', power: 2.1, status: 'online' },
-  { faculty: 'FBS', room: 'BS-102', device: 'Lampu BS-102', type: 'LAMP', power: 0.6, status: 'offline' },
-  { faculty: 'FBS', room: 'BS-103', device: 'AC BS-103 Unit 1', type: 'AC', power: 1.8, status: 'online' },
-  { faculty: 'FBS', room: 'BS-103', device: 'Lampu BS-103', type: 'LAMP', power: 0.7, status: 'online' },
-  { faculty: 'FBS', room: 'Lab Bahasa', device: 'AC Lab Bahasa', type: 'AC', power: 3.2, status: 'online' },
-  { faculty: 'FBS', room: 'Lab Bahasa', device: 'Lampu Lab Bahasa', type: 'LAMP', power: 1.2, status: 'online' },
-  { faculty: 'FBS', room: 'Ruang Seni', device: 'AC Ruang Seni', type: 'AC', power: 2.8, status: 'online' },
-  { faculty: 'FBS', room: 'Ruang Seni', device: 'Lampu Ruang Seni', type: 'LAMP', power: 2.1, status: 'online' },
+  { faculty: 'FBS', room: 'U5.02.01', device: 'AC U5.02.01 Unit 1', type: 'AC', power: 2.4, status: 'online' },
+  { faculty: 'FBS', room: 'U5.02.01', device: 'Lampu U5.02.01', type: 'LAMP', power: 0.8, status: 'online' },
+  { faculty: 'FBS', room: 'U5.02.02', device: 'AC U5.02.02 Unit 1', type: 'AC', power: 2.1, status: 'online' },
+  { faculty: 'FBS', room: 'U5.02.02', device: 'Lampu U5.02.02', type: 'LAMP', power: 0.6, status: 'offline' },
+  { faculty: 'FBS', room: 'U5.02.03', device: 'AC U5.02.03 Unit 1', type: 'AC', power: 1.8, status: 'online' },
+  { faculty: 'FBS', room: 'U5.02.03', device: 'Lampu U5.02.03', type: 'LAMP', power: 0.7, status: 'online' },
+  { faculty: 'FBS', room: 'U5.02.04', device: 'AC U5.02.04', type: 'AC', power: 3.2, status: 'online' },
+  { faculty: 'FBS', room: 'U5.02.04', device: 'Lampu U5.02.04', type: 'LAMP', power: 1.2, status: 'online' },
+  { faculty: 'FBS', room: 'U5.03.05', device: 'AC U5.03.05', type: 'AC', power: 2.8, status: 'online' },
+  { faculty: 'FBS', room: 'U5.03.05', device: 'Lampu U5.03.05', type: 'LAMP', power: 2.1, status: 'online' },
 ]
 
 const FBS_TOTAL_POWER = FBS_DEVICES.reduce((s, d) => s + (d.status === 'online' ? d.power : 0), 0)

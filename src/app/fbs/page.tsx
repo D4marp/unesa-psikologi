@@ -26,23 +26,23 @@ interface DummyDevice {
 }
 
 const INITIAL_DEVICES: DummyDevice[] = [
-  // BS-101
-  { id: 1, location: 'BS-101', device_name: 'AC BS-101 Unit 1', device_type: 'AC', device_eui: 'FBS-AC-101A', current_power: 2.4, current_temperature: 24, status: 'online' },
-  { id: 2, location: 'BS-101', device_name: 'Lampu BS-101', device_type: 'LAMP', device_eui: 'FBS-LM-101A', current_power: 0.8, current_temperature: 0, status: 'online' },
-  // BS-102
-  { id: 3, location: 'BS-102', device_name: 'AC BS-102 Unit 1', device_type: 'AC', device_eui: 'FBS-AC-102A', current_power: 2.1, current_temperature: 25, status: 'online' },
-  { id: 4, location: 'BS-102', device_name: 'Lampu BS-102', device_type: 'LAMP', device_eui: 'FBS-LM-102A', current_power: 0.6, current_temperature: 0, status: 'offline' },
-  // BS-103
-  { id: 5, location: 'BS-103', device_name: 'AC BS-103 Unit 1', device_type: 'AC', device_eui: 'FBS-AC-103A', current_power: 1.8, current_temperature: 26, status: 'online' },
-  { id: 6, location: 'BS-103', device_name: 'Lampu BS-103', device_type: 'LAMP', device_eui: 'FBS-LM-103A', current_power: 0.7, current_temperature: 0, status: 'online' },
-  // Lab Bahasa
-  { id: 7, location: 'Lab Bahasa', device_name: 'AC Lab Bahasa', device_type: 'AC', device_eui: 'FBS-AC-LBA', current_power: 3.2, current_temperature: 23, status: 'online' },
-  { id: 8, location: 'Lab Bahasa', device_name: 'Lampu Lab Bahasa', device_type: 'LAMP', device_eui: 'FBS-LM-LBA', current_power: 1.2, current_temperature: 0, status: 'online' },
-  { id: 9, location: 'Lab Bahasa', device_name: 'Sensor Suhu Lab', device_type: 'SENSOR', device_eui: 'FBS-SN-LBA', current_power: 0.1, current_temperature: 28.5, status: 'online' },
-  // Ruang Seni
-  { id: 10, location: 'Ruang Seni', device_name: 'AC Ruang Seni', device_type: 'AC', device_eui: 'FBS-AC-RSN', current_power: 2.8, current_temperature: 24, status: 'online' },
-  { id: 11, location: 'Ruang Seni', device_name: 'Lampu Ruang Seni', device_type: 'LAMP', device_eui: 'FBS-LM-RSN', current_power: 2.1, current_temperature: 0, status: 'online' },
-  { id: 12, location: 'Ruang Seni', device_name: 'Sensor Ruang Seni', device_type: 'SENSOR', device_eui: 'FBS-SN-RSN', current_power: 0.1, current_temperature: 30.2, status: 'online' },
+  // U5.02.01
+  { id: 1, location: 'U5.02.01', device_name: 'AC U5.02.01 Unit 1', device_type: 'AC', device_eui: 'FBS-AC-101A', current_power: 2.4, current_temperature: 24, status: 'online' },
+  { id: 2, location: 'U5.02.01', device_name: 'Lampu U5.02.01', device_type: 'LAMP', device_eui: 'FBS-LM-101A', current_power: 0.8, current_temperature: 0, status: 'online' },
+  // U5.02.02
+  { id: 3, location: 'U5.02.02', device_name: 'AC U5.02.02 Unit 1', device_type: 'AC', device_eui: 'FBS-AC-102A', current_power: 2.1, current_temperature: 25, status: 'online' },
+  { id: 4, location: 'U5.02.02', device_name: 'Lampu U5.02.02', device_type: 'LAMP', device_eui: 'FBS-LM-102A', current_power: 0.6, current_temperature: 0, status: 'offline' },
+  // U5.02.03
+  { id: 5, location: 'U5.02.03', device_name: 'AC U5.02.03 Unit 1', device_type: 'AC', device_eui: 'FBS-AC-103A', current_power: 1.8, current_temperature: 26, status: 'online' },
+  { id: 6, location: 'U5.02.03', device_name: 'Lampu U5.02.03', device_type: 'LAMP', device_eui: 'FBS-LM-103A', current_power: 0.7, current_temperature: 0, status: 'online' },
+  // U5.02.04
+  { id: 7, location: 'U5.02.04', device_name: 'AC U5.02.04', device_type: 'AC', device_eui: 'FBS-AC-LBA', current_power: 3.2, current_temperature: 23, status: 'online' },
+  { id: 8, location: 'U5.02.04', device_name: 'Lampu U5.02.04', device_type: 'LAMP', device_eui: 'FBS-LM-LBA', current_power: 1.2, current_temperature: 0, status: 'online' },
+  { id: 9, location: 'U5.02.04', device_name: 'Sensor Suhu U5.02.04', device_type: 'SENSOR', device_eui: 'FBS-SN-LBA', current_power: 0.1, current_temperature: 28.5, status: 'online' },
+  // U5.03.05
+  { id: 10, location: 'U5.03.05', device_name: 'AC U5.03.05', device_type: 'AC', device_eui: 'FBS-AC-RSN', current_power: 2.8, current_temperature: 24, status: 'online' },
+  { id: 11, location: 'U5.03.05', device_name: 'Lampu U5.03.05', device_type: 'LAMP', device_eui: 'FBS-LM-RSN', current_power: 2.1, current_temperature: 0, status: 'online' },
+  { id: 12, location: 'U5.03.05', device_name: 'Sensor Suhu U5.03.05', device_type: 'SENSOR', device_eui: 'FBS-SN-RSN', current_power: 0.1, current_temperature: 30.2, status: 'online' },
 ]
 
 function generateHourlyData() {
