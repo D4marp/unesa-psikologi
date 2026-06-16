@@ -103,18 +103,25 @@ export default function DevicesPage() {
     }
   }
 
-  const handleDummyControl = (deviceId: number, action: 'on' | 'off') => {
-    setDevices(prev => prev.map(device => {
-      if (device.id !== deviceId) {
-        return device
-      }
+  const handleDeviceControl = async (deviceId: number, action: 'on' | 'off') => {
+    try {
+      await devicesAPI.control(deviceId, action)
+      setDevices(prev => prev.map(device => {
+        if (device.id !== deviceId) {
+          return device
+        }
 
-      return {
-        ...device,
-        status: action === 'on' ? 'active' : 'offline',
-        iot_status: action === 'on' ? 'active' : 'offline',
-      }
-    }))
+        return {
+          ...device,
+          status: action === 'on' ? 'active' : 'idle',
+          iot_status: action === 'on' ? 'active' : 'offline',
+        }
+      }))
+      setError(null)
+    } catch (err) {
+      console.error('Error controlling device:', err)
+      setError(err instanceof Error ? err.message : 'Gagal mengirim perintah ON/OFF perangkat')
+    }
   }
 
   if (loading) {
@@ -446,18 +453,18 @@ export default function DevicesPage() {
                         </div>
                       </div>
 
-                      {['ac', 'projector'].includes(String(device.device_type).toLowerCase()) && (
+                      {['ac', 'projector', 'lamp', 'lighting'].includes(String(device.device_type).toLowerCase()) && (
                         <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
                           <div className="flex items-center space-x-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kendali Node:</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kendali Perangkat:</span>
                             <span className="text-[9px] text-slate-400 font-mono">#{device.id}</span>
                           </div>
                           <div className="flex space-x-1.5">
                             <button
-                              onClick={() => handleDummyControl(device.id, 'on')}
-                              disabled={isDeviceOnline(device)}
+                              onClick={() => handleDeviceControl(device.id, 'on')}
+                              disabled={device.status === 'active' || device.status === 'online'}
                               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 duration-200 ${
-                                isDeviceOnline(device)
+                                (device.status === 'active' || device.status === 'online')
                                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
                                   : 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
                               }`}
@@ -465,10 +472,10 @@ export default function DevicesPage() {
                               ON
                             </button>
                             <button
-                              onClick={() => handleDummyControl(device.id, 'off')}
-                              disabled={!isDeviceOnline(device)}
+                              onClick={() => handleDeviceControl(device.id, 'off')}
+                              disabled={!(device.status === 'active' || device.status === 'online')}
                               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 duration-200 ${
-                                !isDeviceOnline(device)
+                                !(device.status === 'active' || device.status === 'online')
                                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
                                   : 'bg-red-600 text-white hover:bg-red-700 hover:shadow-md'
                               }`}
